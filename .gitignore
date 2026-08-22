@@ -1,0 +1,43 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Generated datasets, trajectories and local runs
+data/raw/*
+data/generated/*
+data/trajectories/*
+data/accepted/*
+runs/*
+artifacts/*
+!data/raw/.gitkeep
+!data/generated/.gitkeep
+!data/trajectories/.gitkeep
+!data/accepted/.gitkeep
+!runs/.gitkeep
+!artifacts/.gitkeep
+
+# Local databases and logs
+*.sqlite
+*.sqlite3
+*.db
+*.jsonl
+*.log
+
+# Large model/tokenizer files
+*.gguf
+*.safetensors
+*.onnx
+*.pt
+*.pth

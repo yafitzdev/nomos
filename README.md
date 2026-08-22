@@ -1,0 +1,67 @@
+# Fitz-Tool
+
+Fitz-Tool is the data-generation and learned-routing companion for Fitz-Sage:
+a portfolio artifact for making technical research agents better at choosing
+their next tool.
+
+The core research question is:
+
+> Can a small state-aware encoder reduce invalid, irrelevant and premature
+> tool calls for different LLMs while preserving adaptive retrieval and
+> abstention behavior?
+
+The first model is a tool router, not an answer generator:
+
+```text
+question + agent state + legal tool schemas
+    -> ranked next-tool proposals
+```
+
+Pi, the language model and the deterministic controller remain responsible
+for tool execution, arguments, provenance, governance and final selection.
+
+## Repository layout
+
+```text
+fitz-tool/
+├── fitz_tool/          # reusable library code
+├── tools/              # executable generation, validation and training workflows
+├── schemas/            # versioned dataset and trace contracts
+├── configs/            # matrix, teacher and runner configurations
+├── docs/               # design notes and dataset cards
+├── data/
+│   ├── raw/            # immutable local inputs; ignored by git
+│   ├── generated/      # synthetic testcase candidates; ignored by git
+│   ├── trajectories/   # executed teacher traces; ignored by git
+│   └── accepted/       # validated training examples; ignored by git
+├── runs/               # manifests, metrics and SQLite ledgers; ignored
+└── artifacts/          # trained models and exports; ignored
+```
+
+## Current generation pipeline
+
+```text
+source cards + matrix cells
+        -> teacher-generated testcase candidates
+        -> deterministic grounding/deduplication checks
+        -> real Fitz-Sage V2 runner trajectories
+        -> accepted next-tool labels + hard negatives
+        -> encoder training and ablation evaluation
+```
+
+Fitz-Sage V2 is consumed as an external system under test through a stable
+runner contract. This repository remains independently runnable and does not
+require the V1 or V2 checkout at import time.
+
+## Local teacher configuration
+
+Use environment variables or an ignored local `.env` file. Never commit keys.
+
+```text
+FITZ_TOOL_TEACHER_BASE_URL=http://127.0.0.1:19003/v1
+FITZ_TOOL_TEACHER_MODEL=qwen3.8-27b-nvfp4
+FITZ_TOOL_TEACHER_API_KEY=
+```
+
+The local NInfer teacher is a data-generation dependency only. It is not the
+deployment model for the Fitz-Sage agent.

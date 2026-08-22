@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fitz-tool"
+version = "0.1.0"
+description = "State-aware tool-routing data generation and encoder experiments"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = []
+
+[project.optional-dependencies]
+data = ["jsonschema>=4.23", "pydantic>=2.8"]
+train = ["torch>=2.4", "transformers>=4.48", "datasets>=2.20"]
+metrics = ["scikit-learn>=1.5", "psutil>=5.9"]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["fitz_tool*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
