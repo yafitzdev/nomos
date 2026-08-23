@@ -103,8 +103,32 @@ On the frozen external suite, the 100k checkpoint reaches:
 | **Mean** | **68.5%** | **88.0%** |
 
 This is the current accepted line. The next step is not another blind data
-increase: evaluate the 100k checkpoint in the external runner contract and
-measure whether its gains survive real tool execution and state transitions.
+increase: repair the external-agent decision-output path and place Nomos in
+that live candidate-selection loop before collecting more training data.
+
+## Execution-loop gate
+
+The development-only runner harness now sends `runner-request.v2` objects
+through a separate router process and advances a deterministic capability
+simulator after each correct selection. It evaluated 200 held-out questions
+against each of the four unseen registries: 800 tasks and 2,760 planned
+decisions in total. The simulator is not a real API runner, so this is a state
+transition gate rather than production evidence.
+
+The no-router candidate-order baseline completed 0.88% of tasks. The 50k model
+completed 12.38%, and the 100k model completed 12.25%; all three had a 0%
+illegal-selection rate. The 100k model was better on the first decision (62.4%
+versus 53.9% for 50k), but it lost more often after the first successful tool
+result. The 100k model is therefore still a research candidate, not yet a
+promoted runtime model.
+
+The next real-agent smoke used the external Fitz-Sage V2 runner boundary on
+two fixture scenarios. Both `trajectory.v1` outputs were schema-valid, but
+both were rejected: V2 repeated an incomplete tool-call argument payload,
+reached its step limit, and selected no evidence. This is an agent-output
+parsing blocker, not evidence for generating more router rows. Before another
+training run, the external agent must emit complete decision requests and the
+Nomos process must be inserted into that live candidate-selection loop.
 
 ## Commands
 

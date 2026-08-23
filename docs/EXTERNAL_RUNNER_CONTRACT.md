@@ -54,3 +54,43 @@ retains failed-but-safe prefixes as hard negatives.
 `acceptable_tools` may contain more than one tool. A trajectory is positive
 only when deterministic validation marks it accepted. Teacher proposals and
 the model's selected tool are audit fields, not labels by themselves.
+
+## Development router execution harness
+
+The generic router also exposes a separate `runner-request.v2` process for
+portability testing:
+
+```text
+python -m tools.run_router_contract --mode model --artifact artifacts/nomos_generic_portability_100000.pt
+```
+
+It accepts one validated request per JSONL line and returns one
+`router-response.v2` object containing the ranked legal candidates. The
+development evaluator sends these requests through the process boundary and
+simulates a tool result/state update after each correct choice:
+
+```text
+python -m tools.evaluate_runner_contract --input data/generated/nomos_generic_portability_100000.jsonl --limit 200 --output runs/nomos_runner_contract_100k.json --trace-output runs/nomos_runner_contract_100k_traces.jsonl
+```
+
+This evaluator deliberately uses a deterministic capability simulator. It
+checks request validation, legal-candidate handling and multi-step state
+transitions; it is not a substitute for a real API/tool runner or for
+Fitz-Sage V2 validation.
+
+## Fitz-Sage V2 smoke result
+
+The external `runner.v1` adapter was also exercised against two generated
+fixture scenarios using a local Fitz-Sage V2 subprocess. The adapter returned
+two schema-valid `trajectory.v1` traces in the expected order, confirming that
+the process boundary and trace validation work. Neither trajectory was
+accepted: V2 repeated an incomplete `<tool_call>` argument payload, produced
+no legal executed tool according to its own diagnostics, and reached its step
+limit with no selected evidence.
+
+This is an agent-output/parsing blocker, not a router-quality result. The
+smoke did not yet place Nomos in V2's live decision loop, so those traces must
+not be used as positive training data. The next integration gate is to make
+the external agent emit complete, parseable decision requests and then route
+the supplied legal candidates through `runner-request.v2` before measuring
+real tool execution.

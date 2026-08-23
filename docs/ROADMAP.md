@@ -117,8 +117,23 @@ balanced portability rows. It validates with 100,000 unique matrix/type/
 instance/question signatures and zero invalid rows. Training uses a balanced
 54k-row subset and reaches 85.5%/96.0% internal Recall@1/Recall@3. On the same
 four unseen registries it reaches 68.5%/88.0% mean Recall@1/Recall@3, with zero
-illegal-candidate outputs. The next gate is runner-contract evaluation on real
-tool execution; more synthetic rows are not yet justified.
+illegal-candidate outputs.
+
+A development runner-request.v2 execution harness now crosses a separate
+router process and simulates state updates across 800 multi-step tasks. It
+confirms the router is useful: task completion is 0.88% for candidate order,
+12.38% for the 50k model and 12.25% for the 100k model, with zero illegal
+selections. The 100k model improves first decisions but does not yet improve
+complete multi-step tasks, so it is not promoted over the 50k checkpoint. The
+next gate is actual external-agent execution; more synthetic rows are not yet
+justified.
+
+The first external Fitz-Sage V2 smoke produced two schema-valid traces through
+the adapter, but zero accepted trajectories. V2 repeated an incomplete
+tool-call argument payload and exhausted its step limit without selecting
+evidence. Treat this as an agent-output/parsing blocker. Fix the live external
+decision loop and connect its legal candidates to `runner-request.v2` before
+using any new trajectories or expanding the corpus.
 
 ## Current commands
 

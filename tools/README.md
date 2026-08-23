@@ -75,6 +75,17 @@ python -m tools.evaluate_router_v2 --artifact artifacts/router_v2_pilot.pt --inp
 python -m tools.predict_tools_v2 --artifact artifacts/router_v2_pilot.pt --request request.v2.json --top-k 3
 ```
 
+The current generic portability checkpoint can be tested through the separate
+router-request.v2 process and the deterministic multi-step execution harness:
+
+```text
+python -m tools.run_router_contract --mode model --artifact artifacts/nomos_generic_portability_100000.pt
+python -m tools.evaluate_runner_contract --input data/generated/nomos_generic_portability_100000.jsonl --limit 200 --output runs/nomos_runner_contract_100k.json --trace-output runs/nomos_runner_contract_100k_traces.jsonl
+```
+
+The harness is a contract/state-transition test only. Its capability simulator
+does not replace real tool execution or V2 runner acceptance.
+
 The completed registry-aware pilot uses the following reproducible workflow.
 Generated rows, reports and model artifacts stay ignored by git:
 
