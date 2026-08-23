@@ -23,6 +23,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--learning-rate", type=float, default=2e-3)
     parser.add_argument("--seed", type=int, default=20260823)
     parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=0,
+        help="Train in feature batches to bound memory; zero preserves full-batch training.",
+    )
+    parser.add_argument(
         "--train-count",
         type=int,
         default=None,
@@ -96,6 +102,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             epochs=args.epochs,
             learning_rate=args.learning_rate,
             seed=args.seed,
+            batch_size=args.batch_size,
         ),
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)

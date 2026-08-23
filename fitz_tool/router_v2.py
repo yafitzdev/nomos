@@ -79,6 +79,7 @@ class RouterV2Config:
     epochs: int = 20
     learning_rate: float = 2e-3
     seed: int = 20260823
+    batch_size: int = 0
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -87,6 +88,7 @@ class RouterV2Config:
             "epochs": self.epochs,
             "learning_rate": self.learning_rate,
             "seed": self.seed,
+            "batch_size": self.batch_size,
         }
 
 
@@ -316,30 +318,36 @@ def pair_examples_v2(
 ) -> list[dict[str, Any]]:
     examples: list[dict[str, Any]] = []
     for state in states:
-        registry = _registry(state)
-        legal_ids = [str(tool_id) for tool_id in state.get("legal_candidate_ids") or []]
-        legal_specs = registry.resolve(legal_ids)
-        label = state.get("label") or {}
-        acceptable = set(label.get("acceptable_tools") or [])
-        hard_negatives = set(label.get("hard_negative_tools") or [])
-        accepted = bool(state.get("accepted", bool(acceptable)))
-        candidate_ids = legal_ids if accepted else [
-            tool_id for tool_id in legal_ids if tool_id in hard_negatives
-        ]
-        by_id = registry.by_id
-        for tool_id in candidate_ids:
-            tool = by_id[tool_id]
+        for tool, candidate_ids, acceptable, legal_specs in _state_candidate_data(state):
             examples.append(
                 {
                     "state_id": state.get("decision_state_id"),
                     "split": split_name_v2(state),
-                    "tool_id": tool_id,
+                    "tool_id": tool.tool_id,
                     "tool_semantic_fingerprint": tool.semantic_fingerprint,
-                    "label": float(tool_id in acceptable),
+                    "label": float(tool.tool_id in acceptable),
                     "features": featurize_v2(state, tool, legal_specs, feature_dim),
                 }
             )
     return examples
+
+
+def _state_candidate_data(
+    state: Mapping[str, Any],
+) -> Iterable[tuple[ToolSpec, list[str], set[str], tuple[ToolSpec, ...]]]:
+    registry = _registry(state)
+    legal_ids = [str(tool_id) for tool_id in state.get("legal_candidate_ids") or []]
+    legal_specs = registry.resolve(legal_ids)
+    label = state.get("label") or {}
+    acceptable = set(label.get("acceptable_tools") or [])
+    hard_negatives = set(label.get("hard_negative_tools") or [])
+    accepted = bool(state.get("accepted", bool(acceptable)))
+    candidate_ids = legal_ids if accepted else [
+        tool_id for tool_id in legal_ids if tool_id in hard_negatives
+    ]
+    by_id = registry.by_id
+    for tool_id in candidate_ids:
+        yield by_id[tool_id], candidate_ids, acceptable, legal_specs
 
 
 def _rank(
@@ -425,11 +433,9 @@ def train_router_v2(
     if not states:
         raise ValueError("cannot train router.v2 without decision states")
     torch.manual_seed(config.seed)
-    examples = pair_examples_v2(states, feature_dim=config.feature_dim)
-    positives = sum(example["label"] for example in examples)
-    negatives = len(examples) - positives
-    if not positives or not negatives:
-        raise ValueError("training requires positive and negative candidate labels")
+    use_batches = bool(config.batch_size and config.batch_size > 0)
+    examples: list[dict[str, Any]] = []
+    pair_count = positive_pairs = negative_pairs = 0
 
     class RouterV2MLP(nn.Module):
         def __init__(self) -> None:
@@ -445,42 +451,97 @@ def train_router_v2(
             return self.network(inputs)
 
     model = RouterV2MLP()
-    train_examples = [row for row in examples if row["split"] == "train"] or examples
-    features = torch.tensor(
-        [row["features"] for row in train_examples], dtype=torch.float32
-    )
-    labels = torch.tensor([[row["label"]] for row in train_examples], dtype=torch.float32)
+    train_pair_count = train_positive_pairs = train_negative_pairs = 0
+    train_batches: list[tuple[Any, Any]] = []
+    if use_batches:
+        feature_chunk: list[list[float]] = []
+        label_chunk: list[list[float]] = []
+        for state in states:
+            is_train = split_name_v2(state) == "train"
+            for tool, _candidate_ids, acceptable, legal_specs in _state_candidate_data(state):
+                label = float(tool.tool_id in acceptable)
+                pair_count += 1
+                positive_pairs += int(label)
+                negative_pairs += int(not label)
+                if not is_train:
+                    continue
+                train_pair_count += 1
+                train_positive_pairs += int(label)
+                train_negative_pairs += int(not label)
+                feature_chunk.append(featurize_v2(state, tool, legal_specs, config.feature_dim))
+                label_chunk.append([label])
+                if len(feature_chunk) >= config.batch_size:
+                    train_batches.append(
+                        (
+                            torch.tensor(feature_chunk, dtype=torch.float32),
+                            torch.tensor(label_chunk, dtype=torch.float32),
+                        )
+                    )
+                    feature_chunk = []
+                    label_chunk = []
+        if feature_chunk:
+            train_batches.append(
+                (
+                    torch.tensor(feature_chunk, dtype=torch.float32),
+                    torch.tensor(label_chunk, dtype=torch.float32),
+                )
+            )
+        if not train_batches:
+            raise ValueError("training requires at least one train pair")
+    else:
+        examples = pair_examples_v2(states, feature_dim=config.feature_dim)
+        pair_count = len(examples)
+        positive_pairs = sum(example["label"] for example in examples)
+        negative_pairs = pair_count - positive_pairs
+        train_examples = [row for row in examples if row["split"] == "train"] or examples
+        features = torch.tensor(
+            [row["features"] for row in train_examples], dtype=torch.float32
+        )
+        labels = torch.tensor([[row["label"]] for row in train_examples], dtype=torch.float32)
+        train_pair_count = len(train_examples)
+        train_positive_pairs = int(labels.sum().item())
+        train_negative_pairs = train_pair_count - train_positive_pairs
+    if not positive_pairs or not negative_pairs or not train_positive_pairs or not train_negative_pairs:
+        raise ValueError("training requires positive and negative candidate labels")
     positive_weight = max(
         1.0,
-        (len(train_examples) - labels.sum().item()) / max(1.0, labels.sum().item()),
+        train_negative_pairs / max(1.0, float(train_positive_pairs)),
     )
     loss_function = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([positive_weight]))
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
     losses: list[float] = []
-    for _epoch in range(config.epochs):
-        model.train()
-        optimizer.zero_grad()
-        loss = loss_function(model(features), labels)
-        loss.backward()
-        optimizer.step()
-        losses.append(float(loss.item()))
+    if use_batches:
+        for _epoch in range(config.epochs):
+            model.train()
+            epoch_loss = 0.0
+            for batch_features, batch_labels in train_batches:
+                optimizer.zero_grad()
+                loss = loss_function(model(batch_features), batch_labels)
+                loss.backward()
+                optimizer.step()
+                epoch_loss += float(loss.item()) * len(batch_labels)
+            losses.append(epoch_loss / train_pair_count)
+    else:
+        for _epoch in range(config.epochs):
+            model.train()
+            optimizer.zero_grad()
+            loss = loss_function(model(features), labels)
+            loss.backward()
+            optimizer.step()
+            losses.append(float(loss.item()))
 
     metadata: dict[str, Any] = {
         "router_version": ROUTER_VERSION,
         "feature_version": FEATURE_VERSION,
         "config": config.as_dict(),
         "state_count": len(states),
-        "pair_count": len(examples),
+        "pair_count": pair_count,
         "training_state_count": sum(1 for state in states if split_name_v2(state) == "train"),
-        "training_pair_count": sum(1 for example in examples if example["split"] == "train"),
-        "training_positive_pairs": sum(
-            1 for example in examples if example["split"] == "train" and example["label"]
-        ),
-        "training_negative_pairs": sum(
-            1 for example in examples if example["split"] == "train" and not example["label"]
-        ),
-        "positive_pairs": int(positives),
-        "negative_pairs": int(negatives),
+        "training_pair_count": train_pair_count,
+        "training_positive_pairs": train_positive_pairs,
+        "training_negative_pairs": train_negative_pairs,
+        "positive_pairs": int(positive_pairs),
+        "negative_pairs": int(negative_pairs),
         "registry_fingerprints": sorted({_registry(state).fingerprint for state in states}),
         "feature_description": (
             "blake2b hashed observable-state and identity-free tool-registry metadata"

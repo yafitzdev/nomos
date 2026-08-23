@@ -1,9 +1,14 @@
 # Fitz-Tool execution roadmap
 
+> **Current status:** The historical Fitz-Sage-shaped bootstrap described below
+> is retained only as design history. It is not active training data. The
+> project-agnostic 50k corpus has now passed validation, training and held-out
+> evaluation; see [`GENERIC_NINFER_50K.md`](GENERIC_NINFER_50K.md).
+
 ## Objective
 
-Train a first state-aware encoder that predicts the next legal Fitz-Sage tool
-from a question, agent state and legal tool set.
+Train a first state-aware encoder that predicts the next legal operation from a
+question, agent state and an external tool registry.
 
 ## Working agreement
 
@@ -84,53 +89,26 @@ after a multi-source/negative-source manifest exists.
 
 ## Current status
 
-Matrix v1, contracts, uniqueness checks, and the external runner contract are
-implemented. A fresh 1,000-cell materialization passes legality and controlled-
-value coverage checks with zero errors (`runs/matrix_completion_gate_v1_1000.jsonl`).
-The current matrix has ten controlled dimensions and a 19-tool target vocabulary.
+The active generic line is complete through the first training/evaluation gate:
 
-The first current NInfer slice is complete:
+- `data/generated/nomos_generic_ninfer_50000.jsonl` contains 50,000 rows from
+  the project-agnostic v3 matrix. Fitz-Sage-shaped data is quarantined and is
+  not used by the generic model.
+- `runs/nomos_generic_ninfer_50000_validation.json` reports zero invalid rows,
+  zero duplicate questions, 50,000 unique matrix/type/instance signatures,
+  and no held-out registry, family, source or question-template overlap.
+- `runs/nomos_generic_ninfer_50000_sample_audit.json` is a reproducible
+  100-row audit with zero errors.
+- `artifacts/nomos_generic_ninfer_full.pt` trains on only the 34,000-row
+  `train` cohort. Its overall Recall@1/Recall@3/MRR are 87.4%/96.9%/0.923;
+  the illegal-candidate rate is 0%.
+- Held-out Recall@1 is 84.7% for an unseen tool family, 86.3% for unseen tool
+  IDs, 81.0% for unseen question templates and 88.3% for unseen sources.
+  Candidate-order, renamed-ID and sampling-context invariance all pass.
 
-- `data/accepted/ninfer_matrixbound_scenario_slice_1000_v5.jsonl` contains
-  1,000/1,000 accepted rows from Qwen3.8-27B through the local NInfer server;
-- all rows use the immutable payments-migration text fixture for this first
-  text-only slice, while the matrix still varies the legal state/operation/tool
-  dimensions available to that modality;
-- full structural, source-card and uniqueness validation passed with zero
-  duplicate type or instance signatures;
-- the reproducible 25-row grounding audit passed 25/25 against the external V2
-  retriever (`runs/ninfer_matrixbound_1000_v5_grounding.json`);
-- the V2 CLI adapter successfully emitted `trajectory.v1` traces; the clean
-  bounded no-governance sample produced 25/25 contract-valid traces, with 11
-  deterministically accepted trajectories, 14 retained rejected/runner-error
-  candidates, and 55 accepted decision-state rows extractable with zero
-  extraction errors (`data/trajectories/ninfer_matrixbound_1000_v5_v2_runner_audit_25_clean.jsonl`);
-- the governance-shadow version exceeded the 1,800-second audit budget after
-  1,268 local requests, so governance-fresh acceptance is still open. The
-  no-governance rows are contract evidence only and are not yet production
-  training labels.
-
-The DeepSeek slice has not been run. Its endpoint/model/key are now separate
-configuration inputs, but this workspace has no DeepSeek credential configured.
-
-The scale/bootstrap gate is now complete as a separately labeled development
-corpus:
-
-- `data/generated/matrix_template_completion_scale_20000.jsonl` contains
-  20,000 unique matrix-bound scenarios;
-- full structural, source-card, cross-slice and duplicate validation passed;
-  there are zero cell, type-signature or instance-signature overlaps with the
-  22,000 previously reserved rows;
-- the deterministic matrix oracle produced 20,000 valid decision-state rows
-  with zero extraction errors, covering all 19 legal target tools;
-- `artifacts/router_v1_completion_20k.pt` is the trained router.v1 artifact:
-  20,000 states, 147,945 candidate pairs, test Recall@1 0.7685, test Recall@3
-  0.9583, and invalid-candidate rate 0.0.
-
-This v1 artifact is a matrix-template/oracle bootstrap, not yet a production
-Fitz-Sage V2 teacher model. The remaining production-data gates are governance-
-fresh V2 labels, the disjoint DeepSeek slice, and a later retraining run that
-uses those accepted teacher trajectories.
+The next engineering gate is integration testing against external runner
+contracts and a real unseen registry supplied by another agent, not more
+Fitz-Sage-specific training data.
 
 ## Current commands
 

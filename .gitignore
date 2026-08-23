@@ -21,6 +21,8 @@ data/trajectories/*
 data/accepted/*
 runs/*
 artifacts/*
+data/legacy-fitz-sage/*
+data/rejected-generic-v3/*
 !data/raw/.gitkeep
 !data/generated/.gitkeep
 !data/trajectories/.gitkeep

@@ -218,7 +218,18 @@ def invariance_report(
 ) -> dict[str, Any]:
     max_order_delta = max_rename_delta = max_sampling_delta = 0.0
     evaluated = 0
-    for state in list(states)[:sample_size]:
+    state_list = list(states)
+    if len(state_list) <= sample_size:
+        sampled_states = state_list
+    elif sample_size == 1:
+        sampled_states = [state_list[0]]
+    else:
+        positions = {
+            round(index * (len(state_list) - 1) / (sample_size - 1))
+            for index in range(sample_size)
+        }
+        sampled_states = [state_list[index] for index in sorted(positions)]
+    for state in sampled_states:
         if not state.get("legal_candidate_ids"):
             continue
         baseline = _score_map(model, metadata, state)

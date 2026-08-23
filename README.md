@@ -1,9 +1,9 @@
 # Nomos / Fitz-Tool
 
-Nomos is the learned tool-routing model line built by Fitz-Tool. Fitz-Tool is
-the data-generation, validation and training companion for Fitz-Sage: a
-portfolio artifact for making technical research agents better at choosing
-their next tool.
+Nomos is a project-agnostic learned tool-routing coprocessor. Fitz-Tool owns
+the matrix, registries, synthetic data, validation, training and evaluation
+workflows. Fitz-Sage V2 is only one external integration adapter and is not the
+training universe or a runtime dependency.
 
 The core research question is:
 
@@ -21,28 +21,24 @@ question + agent state + legal tool schemas
 Pi, the language model and the deterministic controller remain responsible
 for tool execution, arguments, provenance, governance and final selection.
 
-## Generic router v2
+## Generic router v2 and v3 data line
 
-The repository now includes a side-by-side `router.v2` foundation for Nomos.
-External agents supply a versioned tool registry plus their current legal
-candidate set. V2 scores capability, description, modality, evidence-role,
-side-effect and schema metadata without learning the literal tool ID.
+The generic router accepts a versioned tool registry and an external agent's
+legal candidate set. It represents candidates through capability, modality,
+evidence-role, side-effect, prerequisite and schema metadata rather than
+literal tool names. See `docs/GENERIC_ROUTER_V2.md` for the core contract.
 
-See `docs/GENERIC_ROUTER_V2.md` for the architecture and matrix refinements.
-The paste-ready pilot/training request is in `docs/GENERIC_ROUTER_GOAL.md`.
-V1 code and artifacts remain supported and unchanged.
+The current 50k data line is `matrix.generic.v3`. The matrix creates unique
+state cells, opaque registries and deterministic legality/oracle labels. Local
+NInfer/Qwen is the primary language teacher; DeepSeek can provide a separate
+breadth slice or continue an interrupted run. Each row records its actual
+teacher and model. The separation is deliberate: teacher wording is real LLM
+output, while acceptance and labels remain reproducible and cannot be silently
+changed by a teacher hallucination.
 
-The first completed V2 pilot is a 5,000-state deterministic matrix-oracle
-slice with frozen unseen-ID, renamed-ID, schema, modality, family, source,
-question-template and alternate-registry cohorts. The current encoder feature
-version is `registry-features.v2.2`; NInfer proposals are generated and
-validated separately from labels. The original 5,000-row JSONL is frozen;
-question-generalization training uses a derived interleaved view containing
-the original and indirect/paraphrased question surfaces.
-
-The post-gate scale pilot is 30,000 deterministic states with 20,400 training
-rows and 300 indirect-question holdout rows. It is a data-scale pilot, not a
-claim that the resulting encoder is production-ready.
+The complete workflow and cohort plan are in
+`docs/GENERIC_NINFER_50K.md`. Older Fitz-Sage-shaped generated data is legacy
+material and must not be used as generic training data.
 
 ## Repository layout
 
@@ -65,17 +61,16 @@ fitz-tool/
 ## Current generation pipeline
 
 ```text
-source cards + matrix cells
-        -> teacher-generated testcase candidates
-        -> deterministic grounding/deduplication checks
-        -> real Fitz-Sage V2 runner trajectories
-        -> accepted next-tool labels + hard negatives
-        -> encoder training and ablation evaluation
+generic matrix cells + opaque registry factory
+        -> NInfer-generated question surfaces
+        -> deterministic legal-candidate and provenance validation
+        -> accepted labels + hard negatives
+        -> encoder training and held-out evaluation
 ```
 
 Fitz-Sage V2 is consumed as an external system under test through a stable
-runner contract. This repository remains independently runnable and does not
-require the V1 or V2 checkout at import time.
+runner contract. Its mappings live under `fitz_tool/adapters/` and are not
+imported by the generic generator or router core.
 
 ## Local teacher configuration
 
@@ -83,12 +78,12 @@ Use environment variables or an ignored local `.env` file. Never commit keys.
 
 ```text
 FITZ_TOOL_TEACHER_BASE_URL=http://127.0.0.1:19003/v1
-FITZ_TOOL_TEACHER_MODEL=qwen3.8-27b-nvfp4
+FITZ_TOOL_TEACHER_MODEL=Qwen/Qwen3.8-27B
 FITZ_TOOL_TEACHER_API_KEY=
 
 # Optional external breadth teacher; keep the key in an ignored local .env.
 FITZ_TOOL_DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
-FITZ_TOOL_DEEPSEEK_MODEL=deepseek-chat
+FITZ_TOOL_DEEPSEEK_MODEL=deepseek-v4-flash
 FITZ_TOOL_DEEPSEEK_API_KEY=
 ```
 

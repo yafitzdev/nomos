@@ -1,0 +1,169 @@
+{
+  "matrix_version": "matrix.generic.v3",
+  "dimensions": {
+    "task_domain": [
+      "access_control",
+      "data_processing",
+      "event_handling",
+      "schema_management",
+      "failure_recovery",
+      "versioning",
+      "observability",
+      "consistency_checks",
+      "resource_management",
+      "workflow_automation",
+      "document_analysis",
+      "data_quality"
+    ],
+    "information_operation": [
+      "lookup_exact",
+      "lookup_semantic",
+      "enumerate_sources",
+      "enumerate_records",
+      "compare",
+      "join",
+      "latest_value_selection",
+      "compatibility",
+      "contradiction_resolution",
+      "absence_verification"
+    ],
+    "source_modality": [
+      "text",
+      "pdf",
+      "csv",
+      "excel",
+      "sqlite",
+      "code",
+      "mixed"
+    ],
+    "evidence_topology": [
+      "none_observed",
+      "one_passage",
+      "multiple_passages",
+      "complementary_sources",
+      "cross_format",
+      "contradictory",
+      "absent_after_exhaustion"
+    ],
+    "retrieval_obstacle": [
+      "none",
+      "paraphrase",
+      "acronym",
+      "identifier_variation",
+      "near_duplicate",
+      "long_document_needle",
+      "split_context",
+      "version_noise",
+      "schema_ambiguity"
+    ],
+    "agent_phase": [
+      "planning",
+      "source_discovery",
+      "retrieval",
+      "inspection",
+      "synthesis",
+      "governance",
+      "terminal_readiness"
+    ],
+    "source_inventory_state": ["unknown", "partial", "known"],
+    "query_specificity": ["broad", "entity_bound", "identifier_exact", "schema_bound"],
+    "match_strategy": [
+      "lexical",
+      "exact_identifier",
+      "metadata_filter",
+      "structural",
+      "semantic",
+      "hybrid"
+    ],
+    "evidence_inspection_state": [
+      "none",
+      "snippets_only",
+      "partial_context",
+      "full_context",
+      "multi_source_inspected"
+    ],
+    "requirement_progress": ["none", "partial", "complete", "disputed"],
+    "assessment_freshness": ["never", "stale", "fresh_for_current_evidence"],
+    "candidate_set_difficulty": [
+      "cross_family_easy",
+      "same_family_near_neighbor",
+      "capability_overlap",
+      "schema_only_difference",
+      "modality_constraint",
+      "side_effect_constraint"
+    ],
+    "target_capability": [
+      "plan_retrieval",
+      "list_sources",
+      "search_content",
+      "exact_pattern_search",
+      "search_metadata",
+      "inspect_structured_schema",
+      "search_structured_records",
+      "inspect_document_structure",
+      "search_document_pages",
+      "read_content",
+      "inspect_code_structure",
+      "inspect_evidence",
+      "expand_context",
+      "compare_evidence",
+      "update_requirements",
+      "assess_evidence",
+      "finalize_selection"
+    ],
+    "terminal_outcome": [
+      "ongoing",
+      "selection",
+      "abstention",
+      "clarification",
+      "unresolved_contradiction",
+      "step_limit_termination"
+    ],
+    "agent_contract_profile": [
+      "registry_alpha",
+      "registry_beta",
+      "registry_gamma",
+      "registry_delta",
+      "registry_epsilon"
+    ]
+  },
+  "observable_ranges": {
+    "remaining_steps": [0, 1, 2, 4, 8],
+    "unresolved_requirement_count": [0, 1, 2, 4],
+    "observed_evidence_count": [0, 1, 2, 4, 8],
+    "distractor_count": [0, 2, 5, 10],
+    "prior_search_count": [0, 1, 2, 4]
+  },
+  "model_input_policy": {
+    "runtime_observable_fields": [
+      "question",
+      "agent_state",
+      "history",
+      "plan",
+      "observed_evidence",
+      "governance",
+      "resource_state",
+      "source_state",
+      "query_state",
+      "legal_candidate_ids",
+      "tool_registry"
+    ],
+    "sampling_only_dimensions": [
+      "task_domain",
+      "evidence_topology",
+      "retrieval_obstacle",
+      "candidate_set_difficulty",
+      "target_capability",
+      "terminal_outcome",
+      "agent_contract_profile"
+    ]
+  },
+  "holdout_axes": [
+    "registry_id",
+    "tool_id",
+    "tool_family",
+    "source_document",
+    "question_template",
+    "agent_contract_profile"
+  ]
+}
