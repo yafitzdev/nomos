@@ -135,8 +135,13 @@ places the 100k Nomos checkpoint in the live candidate loop, enforces the
 external runner's legal candidates, repairs one-step output failures and keeps
 source discovery available when a named source is unresolved. The aligned
 payments fixture now completes a 10-decision trajectory and passes deterministic
-acceptance. This is an integration proof, not a production benchmark; the next
-gate is a stratified accepted-trajectory sample before collecting more data.
+acceptance. A first 25-case governance-enforced fresh-start slice now produces
+17 fully accepted trajectories (68%), 103 accepted decision states, zero illegal
+tool selections and 23 retained hard-negative rows. Four cases timed out and
+three selected traces missed expected facts; the sample is useful for finding
+weaknesses, but it is not yet a training-promotion gate. The immediate next
+step is to add a multi-location fixture for comparison questions, repair the
+multi-fact evidence misses, and rerun this gate before collecting more data.
 
 ## Current commands
 

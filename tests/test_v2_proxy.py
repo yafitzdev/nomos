@@ -25,6 +25,31 @@ def _tool(name: str) -> dict:
         required = ["pattern"]
     elif name == "list_tabular_sources":
         properties = {"scope": {"type": "string"}}
+    elif name == "finalize_document_selection":
+        properties = {
+            "status": {"type": "string", "enum": ["selected", "no_confident_matches"]},
+            "selected_evidence_ids": {"type": "array", "items": {"type": "string"}},
+            "covered_requirement_ids": {"type": "array", "items": {"type": "string"}},
+            "unresolved_requirement_ids": {"type": "array", "items": {"type": "string"}},
+        }
+        required = [
+            "status",
+            "selected_evidence_ids",
+            "covered_requirement_ids",
+            "unresolved_requirement_ids",
+        ]
+    elif name == "update_requirement_progress":
+        properties = {
+            "requirements": {
+                "type": "array",
+                "items": {"type": "object"},
+            },
+            "rejected_evidence_ids": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
+        }
+        required = ["requirements", "rejected_evidence_ids"]
     return {
         "type": "function",
         "function": {
@@ -148,3 +173,115 @@ def test_source_discovery_remains_legal_when_named_source_is_unresolved() -> Non
     request = build_runner_request_from_openai(body, source_modality="text")
     request["observed_evidence"] = [{"evidence_id": "E1", "source_id": "external"}]
     assert _candidate_compatible_with_source(request, "list_sources", "text") is True
+
+
+def test_proxy_repairs_required_progress_arrays_instead_of_empty_strings() -> None:
+    body = _body()
+    body["tools"] = [_tool("update_requirement_progress")]
+    payload = {
+        "choices": [
+            {
+                "finish_reason": "tool_calls",
+                "message": {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "bad-call",
+                            "type": "function",
+                            "function": {
+                                "name": "finalize_document_selection",
+                                "arguments": json.dumps({
+                                    "selected_evidence_ids": ["E1"],
+                                    "unresolved_requirement_ids": [],
+                                }),
+                            },
+                        }
+                    ],
+                },
+            }
+        ]
+    }
+    repaired, changed = repair_completion_payload(
+        payload,
+        allowed_names=["update_requirement_progress"],
+        preferred_name="update_requirement_progress",
+        request_body=body,
+    )
+    assert changed is True
+    arguments = json.loads(repaired["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"])
+    assert isinstance(arguments["requirements"], list)
+    assert isinstance(arguments["rejected_evidence_ids"], list)
+
+
+def test_proxy_repairs_terminal_payload_from_visible_evidence_state() -> None:
+    body = _body()
+    body["tools"] = [_tool("finalize_document_selection")]
+    body["messages"].extend(
+        [
+            {
+                "role": "tool",
+                "name": "search_bm25",
+                "content": json.dumps({"status": "ok", "evidence_ids": ["E1"]}),
+            },
+            {
+                "role": "tool",
+                "name": "inspect_evidence",
+                "content": json.dumps({"status": "ok", "evidence_ids": ["E1"]}),
+            },
+            {
+                "role": "tool",
+                "name": "update_requirement_progress",
+                "content": json.dumps(
+                    {
+                        "status": "ok",
+                        "requirements": [
+                            {"requirement_id": "R1", "status": "covered", "evidence_ids": ["E1"]}
+                        ],
+                    }
+                ),
+            },
+            {
+                "role": "tool",
+                "name": "assess_evidence",
+                "content": json.dumps({"status": "ok", "verdict": "SUFFICIENT"}),
+            },
+        ]
+    )
+    payload = {
+        "choices": [
+            {
+                "finish_reason": "tool_calls",
+                "message": {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "bad-call",
+                            "type": "function",
+                            "function": {
+                                "name": "search_bm25",
+                                "arguments": json.dumps({"query": "AUTH-409"}),
+                            },
+                        }
+                    ],
+                },
+            }
+        ]
+    }
+    repaired, changed = repair_completion_payload(
+        payload,
+        allowed_names=["finalize_document_selection"],
+        preferred_name="finalize_document_selection",
+        request_body=body,
+    )
+    assert changed is True
+    arguments = json.loads(
+        repaired["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"]
+    )
+    assert arguments == {
+        "status": "selected",
+        "selected_evidence_ids": ["E1"],
+        "covered_requirement_ids": ["R1"],
+        "unresolved_requirement_ids": [],
+    }

@@ -154,7 +154,9 @@ def repair_completion_payload(
     if existing_call is not None:
         existing_name, existing_arguments = existing_call
         if existing_name in allowed_names and (expected_name is None or existing_name == expected_name):
-            if _valid_tool_calls(message.get("tool_calls"), allowed_names):
+            if _valid_tool_calls(
+                message.get("tool_calls"), allowed_names, request_body=request_body
+            ):
                 return output, False
         if expected_name is not None:
             return _set_tool_call(
@@ -249,9 +251,49 @@ def _coerce_arguments(
 ) -> dict[str, Any]:
     """Keep model arguments compatible with the selected tool schema."""
 
+    properties, required, matched_schema = _tool_schema(body, name)
+    if not matched_schema:
+        return dict(raw_arguments)
+    arguments = {
+        key: value
+        for key, value in raw_arguments.items()
+        if key in properties and _schema_type_matches(properties[key], value)
+    }
+    question = _question_from_body(body)
+    terminal_arguments = _derive_terminal_arguments(body, raw_arguments)
+    for key, derived in terminal_arguments.items():
+        if key not in properties:
+            continue
+        current = arguments.get(key)
+        invalid_status = key == "status" and current not in {
+            "selected",
+            "no_confident_matches",
+        }
+        empty_collection = isinstance(current, list) and not current and bool(derived)
+        if key not in arguments or invalid_status or empty_collection:
+            arguments[key] = derived
+    for key in required:
+        if key in arguments:
+            continue
+        if key == "requirements":
+            arguments[key] = _derive_requirements(body, raw_arguments)
+        elif key in terminal_arguments:
+            arguments[key] = terminal_arguments[key]
+        elif key in {"objective", "query", "pattern", "claim", "question"}:
+            arguments[key] = question
+        else:
+            arguments[key] = _schema_default(properties[key])
+    if "scope" in properties and "scope" not in arguments:
+        arguments["scope"] = str(raw_arguments.get("query") or "")
+    return arguments
+
+
+def _tool_schema(
+    body: Mapping[str, Any] | None,
+    name: str,
+) -> tuple[Mapping[str, Any], list[str], bool]:
     properties: Mapping[str, Any] = {}
     required: list[str] = []
-    matched_schema = False
     if isinstance(body, Mapping) and isinstance(body.get("tools"), list):
         for item in body["tools"]:
             if not isinstance(item, Mapping) or not isinstance(item.get("function"), Mapping):
@@ -259,33 +301,239 @@ def _coerce_arguments(
             function = item["function"]
             if function.get("name") != name:
                 continue
-            matched_schema = True
             parameters = function.get("parameters")
             if isinstance(parameters, Mapping):
-                properties = parameters.get("properties") if isinstance(parameters.get("properties"), Mapping) else {}
-                required = [str(value) for value in parameters.get("required", []) if isinstance(value, str)]
-            break
-    if not matched_schema:
-        return dict(raw_arguments)
-    arguments = {key: value for key, value in raw_arguments.items() if key in properties}
-    question = _question_from_body(body)
-    for key in required:
-        if key in arguments:
+                properties = (
+                    parameters.get("properties")
+                    if isinstance(parameters.get("properties"), Mapping)
+                    else {}
+                )
+                required = [
+                    str(value) for value in parameters.get("required", []) if isinstance(value, str)
+                ]
+            return properties, required, True
+    return properties, required, False
+
+
+def _schema_type_matches(schema: Any, value: Any) -> bool:
+    if not isinstance(schema, Mapping):
+        return True
+    expected = schema.get("type")
+    if expected == "array":
+        return isinstance(value, list)
+    if expected == "object":
+        return isinstance(value, Mapping)
+    if expected == "string":
+        return isinstance(value, str)
+    if expected == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if expected == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if expected == "boolean":
+        return isinstance(value, bool)
+    return True
+
+
+def _schema_default(schema: Any) -> Any:
+    if isinstance(schema, Mapping):
+        expected = schema.get("type")
+        if expected == "array":
+            return []
+        if expected == "object":
+            return {}
+        if expected == "integer" or expected == "number":
+            return 0
+        if expected == "boolean":
+            return False
+    return ""
+
+
+def _walk_mappings(value: Any) -> list[Mapping[str, Any]]:
+    found: list[Mapping[str, Any]] = []
+    if isinstance(value, Mapping):
+        found.append(value)
+        for item in value.values():
+            found.extend(_walk_mappings(item))
+    elif isinstance(value, list):
+        for item in value:
+            found.extend(_walk_mappings(item))
+    return found
+
+
+def _body_json_values(body: Mapping[str, Any] | None) -> list[Any]:
+    values: list[Any] = []
+    if not isinstance(body, Mapping) or not isinstance(body.get("messages"), list):
+        return values
+    for message in body["messages"]:
+        if not isinstance(message, Mapping):
             continue
-        if key in {"objective", "query", "pattern"}:
-            arguments[key] = question
-        elif key == "filters":
-            arguments[key] = {}
-        elif key in {"evidence_ids", "source_scope", "pages"}:
-            arguments[key] = []
-        else:
-            arguments[key] = ""
-    if "scope" in properties and "scope" not in arguments:
-        arguments["scope"] = str(raw_arguments.get("query") or "")
-    return arguments
+        content = message.get("content")
+        if isinstance(content, str):
+            try:
+                values.append(json.loads(content))
+            except json.JSONDecodeError:
+                continue
+        elif isinstance(content, (Mapping, list)):
+            values.append(content)
+    return values
 
 
-def _valid_tool_calls(value: Any, allowed_names: Sequence[str]) -> bool:
+def _transcript_evidence_ids(body: Mapping[str, Any] | None) -> list[str]:
+    found: list[str] = []
+    for value in _body_json_values(body):
+        for mapping in _walk_mappings(value):
+            # The external tool API uses display IDs (E1, E2, ...) in
+            # arguments.  ``evidence_id`` can be an internal UUID from a
+            # result record, so prefer the public/display form here.
+            item = mapping.get("display_id")
+            if isinstance(item, (str, int)) and str(item) not in found:
+                found.append(str(item))
+            for key in ("evidence_ids", "selected_evidence_ids"):
+                items = mapping.get(key)
+                if isinstance(items, list):
+                    for item in items:
+                        if isinstance(item, (str, int)) and str(item) not in found:
+                            found.append(str(item))
+    return found
+
+
+def _transcript_verdict(body: Mapping[str, Any] | None) -> str:
+    verdict = ""
+    for value in _body_json_values(body):
+        for mapping in _walk_mappings(value):
+            raw = mapping.get("verdict")
+            if isinstance(raw, str) and raw.upper() in {"SUFFICIENT", "INSUFFICIENT", "DISPUTED"}:
+                verdict = raw.upper()
+    return verdict
+
+
+def _derive_terminal_arguments(
+    body: Mapping[str, Any] | None,
+    raw_arguments: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Recover a terminal payload from the visible, already-validated transcript.
+
+    This is schema/property driven rather than tied to a particular tool name.
+    It only fills a malformed terminal call from evidence and requirement
+    state already present in the request; it never invents an evidence ID.
+    """
+
+    requirements = _derive_requirements(body, raw_arguments)
+    evidence_ids = raw_arguments.get("selected_evidence_ids")
+    if not isinstance(evidence_ids, list) or not all(
+        isinstance(item, (str, int)) for item in evidence_ids
+    ):
+        evidence_ids = _transcript_evidence_ids(body)
+    evidence_ids = [str(item) for item in evidence_ids]
+    covered = raw_arguments.get("covered_requirement_ids")
+    if not isinstance(covered, list) or not all(isinstance(item, (str, int)) for item in covered):
+        covered = [
+            str(item["requirement_id"])
+            for item in requirements
+            if item.get("status") in {"covered", "complete", "satisfied"}
+        ]
+    covered = [str(item) for item in covered]
+    unresolved = raw_arguments.get("unresolved_requirement_ids")
+    if not isinstance(unresolved, list) or not all(
+        isinstance(item, (str, int)) for item in unresolved
+    ):
+        unresolved = [
+            str(item["requirement_id"])
+            for item in requirements
+            if str(item.get("requirement_id")) not in set(covered)
+        ]
+    unresolved = [str(item) for item in unresolved]
+    verdict = _transcript_verdict(body)
+    selected = bool(evidence_ids) and not unresolved and (
+        verdict == "SUFFICIENT"
+        or (requirements and len(covered) == len(requirements))
+        or not requirements
+    )
+    raw_status = raw_arguments.get("status")
+    status = raw_status if raw_status in {"selected", "no_confident_matches"} else (
+        "selected" if selected else "no_confident_matches"
+    )
+    if status == "no_confident_matches":
+        evidence_ids = []
+        covered = []
+        unresolved = [str(item["requirement_id"]) for item in requirements]
+    return {
+        "status": status,
+        "selected_evidence_ids": evidence_ids,
+        "covered_requirement_ids": covered,
+        "unresolved_requirement_ids": unresolved,
+    }
+
+
+def _derive_requirements(
+    body: Mapping[str, Any] | None,
+    raw_arguments: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    """Build a conservative progress payload from visible transcript state."""
+
+    requirement_rows: dict[str, dict[str, Any]] = {}
+    for value in _body_json_values(body):
+        for mapping in _walk_mappings(value):
+            requirement_id = mapping.get("requirement_id")
+            if isinstance(requirement_id, (str, int)) and str(requirement_id):
+                row = requirement_rows.setdefault(str(requirement_id), {})
+                row.update(
+                    {
+                        key: mapping[key]
+                        for key in ("description", "status", "evidence_ids")
+                        if key in mapping
+                    }
+                )
+    raw_covered = {
+        str(item)
+        for item in raw_arguments.get("covered_requirement_ids", [])
+        if isinstance(item, (str, int))
+    }
+    raw_unresolved = {
+        str(item)
+        for item in raw_arguments.get("unresolved_requirement_ids", [])
+        if isinstance(item, (str, int))
+    }
+    raw_statuses = raw_arguments.get("requirement_status")
+    if isinstance(raw_statuses, list):
+        for item in raw_statuses:
+            if isinstance(item, Mapping) and item.get("requirement_id") is not None:
+                requirement_rows.setdefault(str(item["requirement_id"]), {}).update(dict(item))
+    evidence_ids = raw_arguments.get("selected_evidence_ids")
+    if not isinstance(evidence_ids, list):
+        evidence_ids = _transcript_evidence_ids(body)
+    evidence_ids = [str(item) for item in evidence_ids if isinstance(item, (str, int))]
+    if not requirement_rows:
+        requirement_rows["R1"] = {}
+    output: list[dict[str, Any]] = []
+    for requirement_id, row in requirement_rows.items():
+        status = str(row.get("status") or "")
+        if requirement_id in raw_covered:
+            status = "covered"
+        elif requirement_id in raw_unresolved:
+            status = "missing"
+        elif status not in {"covered", "missing", "disputed"}:
+            status = "covered" if evidence_ids and not raw_unresolved else "missing"
+        output.append(
+            {
+                "requirement_id": requirement_id,
+                "status": status,
+                "evidence_ids": [
+                    str(item)
+                    for item in row.get("evidence_ids", evidence_ids)
+                    if isinstance(item, (str, int))
+                ],
+            }
+        )
+    return output
+
+
+def _valid_tool_calls(
+    value: Any,
+    allowed_names: Sequence[str],
+    *,
+    request_body: Mapping[str, Any] | None = None,
+) -> bool:
     if not isinstance(value, list) or not value:
         return False
     allowed = set(allowed_names)
@@ -303,15 +551,31 @@ def _valid_tool_calls(value: Any, allowed_names: Sequence[str]) -> bool:
                 return False
         if not isinstance(arguments, Mapping):
             return False
+        properties, required, matched_schema = _tool_schema(request_body, str(function.get("name")))
+        if matched_schema:
+            if any(key not in arguments for key in required):
+                return False
+            if any(
+                key not in properties or not _schema_type_matches(properties[key], item)
+                for key, item in arguments.items()
+            ):
+                return False
     return True
 
 
-def _has_tool_call(payload: Mapping[str, Any], allowed_names: Sequence[str]) -> bool:
+def _has_tool_call(
+    payload: Mapping[str, Any],
+    allowed_names: Sequence[str],
+    *,
+    request_body: Mapping[str, Any] | None = None,
+) -> bool:
     choices = payload.get("choices")
     if not isinstance(choices, list) or not choices or not isinstance(choices[0], Mapping):
         return False
     message = choices[0].get("message")
-    return isinstance(message, Mapping) and _valid_tool_calls(message.get("tool_calls"), allowed_names)
+    return isinstance(message, Mapping) and _valid_tool_calls(
+        message.get("tool_calls"), allowed_names, request_body=request_body
+    )
 
 
 def _looks_like_tool_call(payload: Mapping[str, Any]) -> bool:
@@ -524,7 +788,9 @@ class NomosProxyHandler(BaseHTTPRequestHandler):
         try:
             payload = json.loads(content)
             allowed_names = _tool_names(prepared)
-            if isinstance(payload, Mapping) and status < 400 and not _has_tool_call(payload, allowed_names):
+            if isinstance(payload, Mapping) and status < 400 and not _has_tool_call(
+                payload, allowed_names, request_body=prepared
+            ):
                 max_tokens = int(prepared.get("max_tokens") or 0)
                 if max_tokens < self.config.retry_max_tokens:
                     retry = dict(prepared)
@@ -537,7 +803,7 @@ class NomosProxyHandler(BaseHTTPRequestHandler):
                     payload = json.loads(content)
                     retried = True
             if isinstance(payload, Mapping) and status < 400:
-                if not _has_tool_call(payload, allowed_names):
+                if not _has_tool_call(payload, allowed_names, request_body=prepared):
                     payload, repaired = repair_completion_payload(
                         payload,
                         allowed_names=allowed_names,

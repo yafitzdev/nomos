@@ -152,6 +152,26 @@ def _acceptance(
         reasons.append("V2 selection was not deterministically validated")
     if selection.get("selection_rewrites"):
         reasons.append("V2 applied selection rewrites")
+    metadata = result.get("metadata", {})
+    if metadata.get("governance_mode") != "off" and result.get("status") == "selected":
+        diagnostics = [
+            item
+            for item in metadata.get("model_turn_diagnostics", [])
+            if isinstance(item, Mapping)
+        ]
+        actions = [str(item.get("tool_call") or "") for item in diagnostics]
+        final_index = max(
+            (index for index, action in enumerate(actions) if action == "finalize_document_selection"),
+            default=-1,
+        )
+        governance_trajectory = metadata.get("governance_trajectory")
+        if (
+            final_index <= 0
+            or actions[final_index - 1] != "assess_evidence"
+            or not isinstance(governance_trajectory, list)
+            or not governance_trajectory
+        ):
+            reasons.append("selected terminal state lacks a fresh governance assessment")
 
     selected = [item for item in result.get("selected_evidence", []) if isinstance(item, Mapping)]
     selected_text = _evidence_text(result)
@@ -190,10 +210,21 @@ def _progress(result: Mapping[str, Any], index: int) -> list[dict[str, Any]]:
     return [dict(item) for item in values if isinstance(item, Mapping)] if isinstance(values, list) else []
 
 
-def _governance(result: Mapping[str, Any], trace_index: int) -> dict[str, Any]:
+def _governance(
+    result: Mapping[str, Any],
+    trace_index: int,
+    *,
+    prior_actions: Sequence[str] = (),
+) -> dict[str, Any]:
     trajectory = result.get("metadata", {}).get("governance_trajectory", [])
     latest = trajectory[-1] if isinstance(trajectory, list) and trajectory else {}
-    fresh = bool(latest) and trace_index > int(latest.get("step_number", -1))
+    # V2 records the step number after a tool executes.  Consequently the
+    # assessment at decision index 4 is stored as step 5, and a simple
+    # numeric comparison marks the following finalization as stale.  The
+    # contract's observable truth is whether the immediately preceding
+    # decision was assess_evidence; any retrieval/progress action after it
+    # makes the assessment stale again.
+    fresh = bool(latest) and bool(prior_actions) and prior_actions[-1] == "assess_evidence"
     return {
         "assessment_fresh": fresh,
         "requirements": _progress(result, trace_index),
@@ -281,7 +312,13 @@ def _trajectory(
             "plan": result.get("plan", {}),
             "matrix_context": dict(scenario.get("matrix_cell") or {}),
             "observed_evidence": [{"evidence_id": item} for item in prior_evidence],
-            "governance": _governance(result, index),
+            "governance": _governance(
+                result,
+                index,
+                prior_actions=[
+                    str(item.get("tool_call") or "") for item in diagnostics[:index]
+                ],
+            ),
             "legal_tools": legal_tools,
             "proposed_tool": executed or None,
             "executed_tool": executed or None,

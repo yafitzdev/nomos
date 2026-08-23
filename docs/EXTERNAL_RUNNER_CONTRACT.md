@@ -112,3 +112,42 @@ repair path is a legal-candidate safety boundary, not a substitute for tool
 execution, evidence validation or deterministic terminal acceptance. The next
 gate is a stratified external-runner sample large enough to measure accepted
 trajectories and extract only verified decision states for training.
+
+## 25-case external V2 slice
+
+The first fresh-start slice used 25 rows selected from 119 eligible initial
+states across nine integration domains. It was run with V2 governance enforced
+through the Nomos proxy and a 60-second per-scenario timeout.
+
+The result was:
+
+- 25 contract-valid trajectory records and 126 legal tool decisions;
+- 20 trajectories reached `selected`;
+- 17 trajectories passed deterministic fact, provenance, terminal and
+  governance checks (68% full acceptance);
+- 4 scenarios timed out and 1 reached the step limit;
+- 3 selected trajectories were rejected because the evidence omitted one or
+  more expected facts;
+- 0 illegal tool selections;
+- 10 backend output repairs/retries, all constrained to visible legal tools;
+- 103 accepted decision-state rows available for audit, with 23 failed-prefix
+  hard negatives retained separately.
+
+This is useful evidence that Nomos can sit in the live candidate loop and that
+the bridge is now safe enough to evaluate. It is not yet a training promotion:
+the fixture has one document, so comparison cases that require two distinct
+source locations can hang or time out, and several multi-fact questions still
+miss required evidence. Those failures must be repaired or excluded before a
+larger training slice is accepted.
+
+The local audit artifacts are generated under `data/trajectories/` and
+`data/accepted/` (ignored by Git). The reproducible extraction sequence is:
+
+```text
+python -m tools.repair_trajectory_governance --input data/trajectories/v2_external_initial_slice_25_trajectories_v5.jsonl --output data/trajectories/v2_external_initial_slice_25_trajectories_audited.jsonl
+python -m tools.extract_decision_states --trajectories data/trajectories/v2_external_initial_slice_25_trajectories_audited.jsonl --output data/accepted/v2_external_initial_slice_25_decision_states.jsonl --accepted-only
+```
+
+The governance repair command is only for this run, which was captured before
+the exporter off-by-one fix. Future runs should use the corrected exporter in
+`tools/run_v2_runner.py` directly.
