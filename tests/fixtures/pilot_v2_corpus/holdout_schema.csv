@@ -1,0 +1,4 @@
+name,kind,nullable
+request_id,identifier,false
+signature,timestamp,false
+retry_after,integer,true

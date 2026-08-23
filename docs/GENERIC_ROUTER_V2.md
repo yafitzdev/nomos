@@ -67,6 +67,9 @@ The scorer consumes only:
 The scorer does not consume `matrix_context`, `sampling_context`, labels, target
 capability, future governance paths or terminal outcomes. These fields may be
 retained for generation, stratification and audit but are not runtime features.
+The current feature encoder is `registry-features.v2.1`; it adds lexical
+question-intent/candidate-intent interactions derived from the observable
+question, without reading the matrix target label.
 
 ## Matrix v2 refinements
 
@@ -103,18 +106,24 @@ cohorts for:
 
 Report Recall@1, Recall@3, MRR, fixed-order baseline, invalid-candidate rate,
 candidate-order invariance, ID-renaming invariance and question/matrix
-ablations. Metrics from deterministic matrix-oracle data must remain separate
-from NInfer, DeepSeek and governance-validated external runner data.
+ablations. Include an indirect question-template counterfactual; capability
+phrases in training questions can otherwise make the question signal look
+stronger than it is. Metrics from deterministic matrix-oracle data must remain
+separate from NInfer, DeepSeek and governance-validated external runner data.
 
 ## Commands
 
 ```text
 python -m tools.validate_registry configs/tool_registry.fitz_sage_v2.json
-python -m tools.materialize_matrix_v2 --count 5000 --seed 20260823 --output data/generated/matrix_v2_pilot_5000.jsonl
-python -m tools.adapt_v1_states_to_v2 --input data/accepted/matrix_template_completion_scale_20000_states.jsonl --output data/accepted/router_v2_adapted_bootstrap.jsonl
-python -m tools.train_encoder_v2 --input data/accepted/router_v2_pilot_states.jsonl --output artifacts/router_v2_pilot.pt --epochs 20 --feature-dim 4096 --hidden-dim 128
-python -m tools.evaluate_router_v2 --artifact artifacts/router_v2_pilot.pt --input data/accepted/router_v2_pilot_states.jsonl
-python -m tools.predict_tools_v2 --artifact artifacts/router_v2_pilot.pt --request request.v2.json --top-k 3
+python -m tools.validate_registry configs/tool_registry.alternate_v2.json
+python -m tools.validate_registry configs/tool_registry.heldout_v2.json
+python -m tools.generate_router_v2_pilot --count 5000 --seed 20260823 --output data/generated/router_v2_pilot_5000.jsonl --manifest runs/router_v2_pilot_5000_manifest.json
+python -m tools.validate_router_v2_pilot --input data/generated/router_v2_pilot_5000.jsonl --expected-count 5000 --min-per-target 200 --report runs/router_v2_pilot_5000_validation.json
+python -m tools.audit_router_v2_holdouts --input data/generated/router_v2_pilot_5000.jsonl --report runs/router_v2_pilot_5000_holdout_audit.json
+python -m tools.train_encoder_v2 --input data/generated/router_v2_pilot_5000.jsonl --output artifacts/router_v2_pilot_full.pt --train-count 3400 --epochs 15 --feature-dim 2048 --hidden-dim 128 --learning-rate 0.002 --seed 20260823
+python -m tools.evaluate_router_v2 --artifact artifacts/router_v2_pilot_full.pt --input data/generated/router_v2_pilot_5000.jsonl --output runs/router_v2_pilot_full_evaluation.json
+python -m tools.generate_ninfer_router_v2_slice --count 100 --seed 20260824 --model Qwen/Qwen3.8-27B --no-api-key --batch-size 4 --concurrency 2 --output data/generated/ninfer_router_v2_proposals_100.jsonl
+python -m tools.validate_ninfer_router_v2_slice --input data/generated/ninfer_router_v2_proposals_100.jsonl --expected-count 100 --sample-size 25 --seed 20260824 --report runs/ninfer_router_v2_proposals_100_validation.json
 ```
 
 The adapted V1 rows are useful for compatibility and smoke testing. Because

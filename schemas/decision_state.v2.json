@@ -27,6 +27,12 @@
     "decision_state_id": {"type": "string", "minLength": 1},
     "trajectory_id": {"type": "string", "minLength": 1},
     "scenario_id": {"type": "string", "minLength": 1},
+    "pilot_version": {"const": "pilot.v2"},
+    "matrix_version": {"const": "matrix.v2"},
+    "matrix_cell_id": {"type": "string", "minLength": 1},
+    "matrix_cell": {"type": "object"},
+    "type_signature": {"type": "string", "minLength": 1},
+    "instance_signature": {"type": "string", "minLength": 1},
     "step": {"type": "integer", "minimum": 0},
     "question": {"type": "string", "minLength": 1},
     "agent_state": {"type": "object"},
@@ -55,6 +61,16 @@
         "label_source": {"type": "string", "minLength": 1}
       }
     },
+    "source_card_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "source_kind": {"type": "string", "minLength": 1},
+    "evaluation_cohort": {"type": "string", "minLength": 1},
+    "split_group_id": {"type": "string", "minLength": 1},
+    "question_template_id": {"type": "string", "minLength": 1},
     "sampling_context": {"type": "object"},
     "evaluation_partition": {"enum": ["train", "validation", "test"]},
     "provenance": {

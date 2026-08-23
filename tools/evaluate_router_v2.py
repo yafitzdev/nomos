@@ -9,6 +9,7 @@ from typing import Any, Sequence
 
 from fitz_tool.evaluation_v2 import evaluate_router_v2_report
 from fitz_tool.generic_contracts import validate_decision_state_v2
+from fitz_tool.pilot_v2 import validate_pilot_state
 from fitz_tool.router_v2 import load_router_v2
 
 
@@ -16,6 +17,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifact", type=Path, required=True)
     parser.add_argument("--input", type=Path, required=True)
+    parser.add_argument("--output", type=Path, default=None)
     return parser
 
 
@@ -30,7 +32,7 @@ def _read_states(path: Path) -> list[dict[str, Any]]:
         except json.JSONDecodeError as exc:
             errors.append({"line": line_number, "error": str(exc)})
             continue
-        report = validate_decision_state_v2(state)
+        report = validate_pilot_state(state) if state.get("pilot_version") else validate_decision_state_v2(state)
         if report.valid:
             states.append(state)
         else:
@@ -44,6 +46,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     model, metadata = load_router_v2(str(args.artifact))
     report = evaluate_router_v2_report(model, metadata, _read_states(args.input))
+    if args.output is not None:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0
 

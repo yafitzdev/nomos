@@ -1,0 +1,5 @@
+field,type,required
+payment_id,string,true
+amount,decimal,true
+currency,string,true
+captured_at,timestamp,false

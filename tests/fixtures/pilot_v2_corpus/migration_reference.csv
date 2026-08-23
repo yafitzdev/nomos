@@ -1,0 +1,4 @@
+version,operation,compatibility
+v1,capture,deprecated
+v2,capture,compatible
+v2,refund,additive

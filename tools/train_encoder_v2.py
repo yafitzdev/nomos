@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections import defaultdict
 from pathlib import Path
 from typing import Any, Sequence
 
 from fitz_tool.generic_contracts import validate_decision_state_v2
+from fitz_tool.pilot_v2 import validate_pilot_state
 from fitz_tool.router_v2 import RouterV2Config, save_router_v2, train_router_v2
 
 
@@ -20,6 +22,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--hidden-dim", type=int, default=128)
     parser.add_argument("--learning-rate", type=float, default=2e-3)
     parser.add_argument("--seed", type=int, default=20260823)
+    parser.add_argument(
+        "--train-count",
+        type=int,
+        default=None,
+        help="Use only this many deterministic training states while retaining all frozen evaluation rows.",
+    )
     return parser
 
 
@@ -34,7 +42,7 @@ def _read_states(path: Path) -> list[dict[str, Any]]:
         except json.JSONDecodeError as exc:
             errors.append({"line": line_number, "error": str(exc)})
             continue
-        report = validate_decision_state_v2(value)
+        report = validate_pilot_state(value) if value.get("pilot_version") else validate_decision_state_v2(value)
         if report.valid:
             states.append(value)
         else:
@@ -44,9 +52,42 @@ def _read_states(path: Path) -> list[dict[str, Any]]:
     return states
 
 
+def _balanced_training_subset(states: list[dict[str, Any]], count: int) -> list[dict[str, Any]]:
+    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for state in states:
+        target = str((state.get("sampling_context") or {}).get("target_capability", "unknown"))
+        groups[target].append(state)
+    selected: list[dict[str, Any]] = []
+    positions = {target: 0 for target in groups}
+    targets = sorted(groups)
+    while len(selected) < count:
+        progressed = False
+        for target in targets:
+            position = positions[target]
+            if position >= len(groups[target]):
+                continue
+            selected.append(groups[target][position])
+            positions[target] += 1
+            progressed = True
+            if len(selected) == count:
+                break
+        if not progressed:
+            break
+    return selected
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     states = _read_states(args.input)
+    if args.train_count is not None:
+        if args.train_count < 1:
+            raise SystemExit("--train-count must be positive")
+        train_rows = [state for state in states if state.get("evaluation_partition") == "train"]
+        if args.train_count > len(train_rows):
+            raise SystemExit(f"--train-count exceeds available training rows: {len(train_rows)}")
+        states = _balanced_training_subset(train_rows, args.train_count) + [
+            state for state in states if state.get("evaluation_partition") != "train"
+        ]
     model, metadata = train_router_v2(
         states,
         config=RouterV2Config(

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import copy
-from collections import defaultdict
+from collections import Counter, defaultdict
 from typing import Any, Callable, Iterable, Mapping
 
 from .router_v2 import rank_tools_v2
@@ -11,6 +11,19 @@ from .tool_registry import ToolRegistry
 
 
 RankingFunction = Callable[[Mapping[str, Any]], list[str]]
+INVARIANCE_TOLERANCE = 1e-6
+
+
+def _cached_ranker(ranker: RankingFunction) -> RankingFunction:
+    cache: dict[int, list[str]] = {}
+
+    def rank(state: Mapping[str, Any]) -> list[str]:
+        key = id(state)
+        if key not in cache:
+            cache[key] = ranker(state)
+        return list(cache[key])
+
+    return rank
 
 
 def _metrics(states: Iterable[Mapping[str, Any]], ranker: RankingFunction) -> dict[str, Any]:
@@ -107,18 +120,49 @@ def evaluate_router_v2_report(
     metadata: Mapping[str, Any],
     states: list[Mapping[str, Any]],
 ) -> dict[str, Any]:
-    model_ranker = _model_ranker(model, metadata)
+    model_ranker = _cached_ranker(_model_ranker(model, metadata))
     cohorts: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
     for state in states:
         cohorts[str(state.get("evaluation_cohort", "unspecified"))].append(state)
 
     no_question = [dict(copy.deepcopy(state), question="") for state in states]
     no_metadata = [_neutralize_registry(state) for state in states]
+    no_question_ranker = _cached_ranker(_model_ranker(model, metadata))
+    no_metadata_ranker = _cached_ranker(_model_ranker(model, metadata))
+    target_groups: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    family_groups: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    for state in states:
+        target = str((state.get("sampling_context") or {}).get("target_capability", "unknown"))
+        target_groups[target].append(state)
+        acceptable = (state.get("label") or {}).get("acceptable_tools") or []
+        registry = ToolRegistry.from_dict(state["tool_registry"])
+        if acceptable:
+            family = registry.require(str(acceptable[0])).tool_family
+            family_groups[family].append(state)
+
+    confusion_pairs: Counter[tuple[str, str]] = Counter()
+    for state in states:
+        acceptable = set((state.get("label") or {}).get("acceptable_tools") or [])
+        if not acceptable or not state.get("legal_candidate_ids"):
+            continue
+        ranked = model_ranker(state)
+        if ranked and ranked[0] not in acceptable:
+            confusion_pairs[(sorted(acceptable)[0], ranked[0])] += 1
     return {
         "overall": _metrics(states, model_ranker),
         "cohorts": {
             cohort: _metrics(rows, model_ranker) for cohort, rows in sorted(cohorts.items())
         },
+        "by_target_capability": {
+            target: _metrics(rows, model_ranker) for target, rows in sorted(target_groups.items())
+        },
+        "by_tool_family": {
+            family: _metrics(rows, model_ranker) for family, rows in sorted(family_groups.items())
+        },
+        "confusion_pairs": [
+            {"acceptable": acceptable, "predicted": predicted, "count": count}
+            for (acceptable, predicted), count in confusion_pairs.most_common(25)
+        ],
         "baselines": {
             "caller_order": _metrics(
                 states, lambda state: list(state.get("legal_candidate_ids") or [])
@@ -126,8 +170,8 @@ def evaluate_router_v2_report(
             "capability_frequency": _metrics(states, _frequency_ranker(metadata)),
         },
         "ablations": {
-            "question_removed": _metrics(no_question, model_ranker),
-            "tool_metadata_removed": _metrics(no_metadata, model_ranker),
+            "question_removed": _metrics(no_question, no_question_ranker),
+            "tool_metadata_removed": _metrics(no_metadata, no_metadata_ranker),
         },
         "invariance": invariance_report(model, metadata, states),
     }
@@ -213,6 +257,7 @@ def invariance_report(
         "candidate_order_max_score_delta": max_order_delta,
         "tool_id_rename_max_score_delta": max_rename_delta,
         "sampling_context_max_score_delta": max_sampling_delta,
-        "tolerance": 1e-7,
-        "passed": max(max_order_delta, max_rename_delta, max_sampling_delta) <= 1e-7,
+        "tolerance": INVARIANCE_TOLERANCE,
+        "passed": max(max_order_delta, max_rename_delta, max_sampling_delta)
+        <= INVARIANCE_TOLERANCE,
     }

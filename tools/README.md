@@ -75,5 +75,30 @@ python -m tools.evaluate_router_v2 --artifact artifacts/router_v2_pilot.pt --inp
 python -m tools.predict_tools_v2 --artifact artifacts/router_v2_pilot.pt --request request.v2.json --top-k 3
 ```
 
+The completed registry-aware pilot uses the following reproducible workflow.
+Generated rows, reports and model artifacts stay ignored by git:
+
+```text
+python -m tools.generate_router_v2_pilot --count 5000 --seed 20260823 --output data/generated/router_v2_pilot_5000.jsonl --manifest runs/router_v2_pilot_5000_manifest.json
+python -m tools.validate_router_v2_pilot --input data/generated/router_v2_pilot_5000.jsonl --expected-count 5000 --min-per-target 200 --report runs/router_v2_pilot_5000_validation.json
+python -m tools.audit_router_v2_holdouts --input data/generated/router_v2_pilot_5000.jsonl --report runs/router_v2_pilot_5000_holdout_audit.json
+python -m tools.train_encoder_v2 --input data/generated/router_v2_pilot_5000.jsonl --output artifacts/router_v2_pilot_1k.pt --train-count 1000 --epochs 15 --feature-dim 2048 --hidden-dim 128 --learning-rate 0.002 --seed 20260823
+python -m tools.train_encoder_v2 --input data/generated/router_v2_pilot_5000.jsonl --output artifacts/router_v2_pilot_2_5k.pt --train-count 2500 --epochs 15 --feature-dim 2048 --hidden-dim 128 --learning-rate 0.002 --seed 20260823
+python -m tools.train_encoder_v2 --input data/generated/router_v2_pilot_5000.jsonl --output artifacts/router_v2_pilot_full.pt --train-count 3400 --epochs 15 --feature-dim 2048 --hidden-dim 128 --learning-rate 0.002 --seed 20260823
+python -m tools.evaluate_router_v2 --artifact artifacts/router_v2_pilot_full.pt --input data/generated/router_v2_pilot_5000.jsonl --output runs/router_v2_pilot_full_evaluation.json
+```
+
+If the local NInfer endpoint is available, proposals remain separate from
+deterministic labels and require an explicit 25-row validation sample:
+
+```text
+python -m tools.generate_ninfer_router_v2_slice --count 100 --seed 20260824 --model Qwen/Qwen3.8-27B --no-api-key --batch-size 4 --concurrency 2 --output data/generated/ninfer_router_v2_proposals_100.jsonl
+python -m tools.validate_ninfer_router_v2_slice --input data/generated/ninfer_router_v2_proposals_100.jsonl --expected-count 100 --sample-size 25 --seed 20260824 --report runs/ninfer_router_v2_proposals_100_validation.json
+```
+
+Those proposals are marked `not_executed` and `unverified_teacher_proposal`;
+they cannot become training labels until an external runner verifies evidence,
+provenance, governance freshness and terminal correctness.
+
 The V2 architecture, observable-state boundary and holdout requirements are
 documented in `docs/GENERIC_ROUTER_V2.md`.

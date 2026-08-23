@@ -32,6 +32,12 @@ See `docs/GENERIC_ROUTER_V2.md` for the architecture and matrix refinements.
 The paste-ready pilot/training request is in `docs/GENERIC_ROUTER_GOAL.md`.
 V1 code and artifacts remain supported and unchanged.
 
+The first completed V2 pilot is a 5,000-state deterministic matrix-oracle
+slice with frozen unseen-ID, renamed-ID, schema, modality, family, source,
+question-template and alternate-registry cohorts. The current encoder feature
+version is `registry-features.v2.1`; NInfer proposals are generated and
+validated separately from labels.
+
 ## Repository layout
 
 ```text

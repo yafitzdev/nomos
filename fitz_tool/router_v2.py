@@ -15,7 +15,27 @@ from .tool_registry import ToolRegistry, ToolSpec
 
 TOKEN_RE = re.compile(r"[a-zA-Z0-9_]+")
 ROUTER_VERSION = "router.v2"
-FEATURE_VERSION = "registry-features.v2"
+FEATURE_VERSION = "registry-features.v2.1"
+
+QUESTION_INTENT_CUES: dict[str, tuple[str, ...]] = {
+    "plan_retrieval": ("plan", "planning", "approach", "strategy"),
+    "list_sources": ("list", "available", "inventory"),
+    "search_content": ("passage", "content", "documented"),
+    "exact_pattern_search": ("exact", "identifier", "phrase"),
+    "search_metadata": ("metadata", "catalog"),
+    "inspect_structured_schema": ("schema", "column", "field", "fields"),
+    "search_structured_records": ("record", "row", "filter", "table"),
+    "inspect_document_structure": ("structure", "section", "organization"),
+    "search_document_pages": ("pages", "page-level"),
+    "read_content": ("read", "full", "content"),
+    "inspect_code_structure": ("code", "symbol", "definition", "implementation"),
+    "inspect_evidence": ("evidence", "candidate"),
+    "expand_context": ("context", "snippet", "surrounding", "ambiguous"),
+    "compare_evidence": ("compare", "contradiction", "agreement", "difference"),
+    "update_requirements": ("requirement", "coverage", "progress"),
+    "assess_evidence": ("sufficient", "satisfy", "assessment"),
+    "finalize_selection": ("finalize", "select", "selection"),
+}
 
 
 @dataclass(frozen=True)
@@ -79,6 +99,15 @@ def _schema_tokens(schema: Mapping[str, Any], prefix: str = "argument") -> list[
     return output
 
 
+def _question_intents(question_tokens: list[str]) -> list[str]:
+    observed = set(question_tokens)
+    return [
+        intent
+        for intent, cues in QUESTION_INTENT_CUES.items()
+        if observed.intersection(cues)
+    ]
+
+
 def tool_semantic_tokens(tool: ToolSpec) -> list[str]:
     """Represent one candidate without exposing its concrete tool_id."""
 
@@ -120,6 +149,8 @@ def state_candidate_tokens(
     tokens: list[str] = []
     question_tokens = _tokens(observable.get("question"))
     tokens.extend(f"question={token}" for token in question_tokens)
+    question_intents = _question_intents(question_tokens)
+    tokens.extend(f"question_intent={intent}" for intent in question_intents)
     for field in (
         "agent_state",
         "history",
@@ -172,6 +203,8 @@ def state_candidate_tokens(
             tokens.append(f"capability_context={capability}|{key}={value}")
         for question_token in sorted(set(question_tokens))[:64]:
             tokens.append(f"capability_question={capability}|{question_token}")
+        for intent in question_intents:
+            tokens.append(f"capability_question_intent={capability}|{intent}")
 
     description_terms = set(_tokens(candidate.description))
     for overlap in sorted(description_terms & set(question_tokens)):
@@ -404,6 +437,14 @@ def train_router_v2(
         "config": config.as_dict(),
         "state_count": len(states),
         "pair_count": len(examples),
+        "training_state_count": sum(1 for state in states if split_name_v2(state) == "train"),
+        "training_pair_count": sum(1 for example in examples if example["split"] == "train"),
+        "training_positive_pairs": sum(
+            1 for example in examples if example["split"] == "train" and example["label"]
+        ),
+        "training_negative_pairs": sum(
+            1 for example in examples if example["split"] == "train" and not example["label"]
+        ),
         "positive_pairs": int(positives),
         "negative_pairs": int(negatives),
         "registry_fingerprints": sorted({_registry(state).fingerprint for state in states}),
@@ -415,6 +456,8 @@ def train_router_v2(
     positive_family_counts: Counter[str] = Counter()
     positive_capability_counts: Counter[str] = Counter()
     for state in states:
+        if split_name_v2(state) != "train":
+            continue
         registry = _registry(state)
         for tool_id in (state.get("label") or {}).get("acceptable_tools") or []:
             tool = registry.require(str(tool_id))

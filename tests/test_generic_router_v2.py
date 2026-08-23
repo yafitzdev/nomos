@@ -4,6 +4,7 @@ import copy
 import hashlib
 import inspect
 import json
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,12 @@ from fitz_tool.matrix_v2 import (
     load_matrix_v2_spec,
     materialize_matrix_v2_cells,
     validate_matrix_v2_cell,
+)
+from fitz_tool.pilot_v2 import (
+    COHORT_COUNTS,
+    generate_pilot_states,
+    load_pilot_registries,
+    validate_pilot_state,
 )
 from fitz_tool.router_v2 import (
     RouterV2Config,
@@ -125,7 +132,7 @@ def _state(
             "trajectory_hash": hashlib.sha256(state_id.encode()).hexdigest(),
             "registry_fingerprint": registry.fingerprint,
             "matrix_cell_id": hashlib.sha256((state_id + "-matrix").encode()).hexdigest(),
-            "feature_version": "registry-features.v2",
+            "feature_version": "registry-features.v2.1",
             "validator_version": "fixture-validator.v2",
         },
     }
@@ -136,6 +143,20 @@ def test_fitz_sage_registry_is_valid_and_complete() -> None:
     assert len(registry.tools) == 19
     assert registry.require("search_bm25").capabilities
     assert len(registry.fingerprint) == 64
+
+
+def test_pilot_registry_catalog_has_realistic_cross_registry_coverage() -> None:
+    registries = load_pilot_registries()
+    tool_ids = {tool.tool_id for registry in registries.values() for tool in registry.tools}
+    families = {
+        tool.tool_family for registry in registries.values() for tool in registry.tools
+    }
+    training_families = {tool.tool_family for tool in registries["fitz_sage_v2"].tools}
+    heldout_families = {tool.tool_family for tool in registries["heldout_research_tools_v2"].tools}
+    assert len(tool_ids) >= 30
+    assert len(families) >= 8
+    assert len(registries["fitz_sage_v2"].tools) >= 15
+    assert training_families.isdisjoint(heldout_families)
 
 
 def test_registry_rejects_duplicate_tool_ids() -> None:
@@ -228,6 +249,22 @@ def test_matrix_v2_materialization_is_legal_unique_and_covers_targets() -> None:
     assert all(not validate_matrix_v2_cell(cell.values, spec) for cell in cells)
     targets = {cell.values["target_capability"] for cell in cells}
     assert targets == set(spec["dimensions"]["target_capability"])
+
+
+def test_pilot_v2_generation_is_balanced_unique_and_provenance_bound() -> None:
+    rows, manifest = generate_pilot_states()
+    assert len(rows) == sum(COHORT_COUNTS.values()) == 5000
+    assert manifest["type_signatures"] == 5000
+    assert manifest["instance_signatures"] == 5000
+    assert all(validate_pilot_state(row).valid for row in rows[:10])
+    train_targets = [
+        row["sampling_context"]["target_capability"]
+        for row in rows
+        if row["evaluation_cohort"] == "train"
+    ]
+    assert set(train_targets) == set(load_matrix_v2_spec()["dimensions"]["target_capability"])
+    assert min(Counter(train_targets).values()) >= 200
+    assert len({row["matrix_cell_id"] for row in rows}) == 5000
 
 
 def test_v1_adapter_produces_valid_generic_state() -> None:
