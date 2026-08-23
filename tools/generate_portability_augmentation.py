@@ -102,9 +102,15 @@ def _load_ledger(path: Path) -> dict[str, set[str]]:
     return ledger
 
 
-def _target_sequence(count: int, seed: int) -> list[str]:
+def _target_sequence(count: int, seed: int, distribution: str = "focused") -> list[str]:
     if count < 1:
         raise ValueError("count must be positive")
+    if distribution == "balanced":
+        targets = [TARGET_CAPABILITIES[index % len(TARGET_CAPABILITIES)] for index in range(count)]
+        random.Random(seed + 17).shuffle(targets)
+        return targets
+    if distribution != "focused":
+        raise ValueError(f"unknown target distribution: {distribution}")
     targets: list[str] = []
     remaining = count
     for target, target_count in FOCUSED_TARGET_COUNTS.items():
@@ -127,11 +133,12 @@ def _skeleton_batches(
     start_index: int,
     batch_size: int,
     base_ledger: Mapping[str, set[str]],
+    distribution: str,
 ) -> Iterable[list[dict[str, Any]]]:
     spec = load_generic_matrix_spec(GENERIC_MATRIX_PATH)
     cards = _source_cards()
     rng = random.Random(seed)
-    targets = _target_sequence(count, seed)
+    targets = _target_sequence(count, seed, distribution)
     used_cells = set(base_ledger["matrix_cell_id"])
     used_types = set(base_ledger["type_signature"])
     used_instances = set(base_ledger["instance_signature"])
@@ -314,6 +321,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--retries", type=int, default=3)
     parser.add_argument("--invalid-retries", type=int, default=3)
     parser.add_argument("--duplicate-retries", type=int, default=4)
+    parser.add_argument("--distribution", choices=("focused", "balanced"), default="focused")
     parser.add_argument("--timeout", type=float, default=180.0)
     parser.add_argument("--max-tokens", type=int, default=900)
     parser.add_argument("--no-api-key", action="store_true")
@@ -371,6 +379,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 start_index=args.start_index,
                 batch_size=args.batch_size,
                 base_ledger=base_ledger,
+                distribution=args.distribution,
             ):
                 todo = [state for state in skeletons if state["decision_state_id"] not in existing_ids]
                 if not todo:
@@ -431,6 +440,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "model": model,
         "base_url": base_url,
         "prompt_version": PROMPT_VERSION,
+        "distribution": args.distribution,
         "feature_version": FEATURE_VERSION,
         "base_input": str(args.base_input),
         "base_count": len(_load_ledger(args.base_input)["decision_state_id"]),

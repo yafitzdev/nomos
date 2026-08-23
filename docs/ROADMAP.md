@@ -89,7 +89,7 @@ after a multi-source/negative-source manifest exists.
 
 ## Current status
 
-The active generic line is complete through the first training/evaluation gate:
+The active generic line is complete through the 100k portability gate:
 
 - `data/generated/nomos_generic_ninfer_50000.jsonl` contains 50,000 rows from
   the project-agnostic v3 matrix. Fitz-Sage-shaped data is quarantined and is
@@ -106,16 +106,19 @@ The active generic line is complete through the first training/evaluation gate:
   IDs, 81.0% for unseen question templates and 88.3% for unseen sources.
   Candidate-order, renamed-ID and sampling-context invariance all pass.
 
-The first external portability gate is now complete. A frozen four-registry
-suite reaches a mean 57.2% Recall@1 and 83.5% Recall@3, versus 14.2% and 41.5%
-for the candidate-order baseline, with zero illegal-candidate outputs. The
-weakest capabilities are `compare_evidence`, `search_content`,
-`search_metadata` and `exact_pattern_search`.
+The first external portability gate reached a mean 57.2% Recall@1 and 83.5%
+Recall@3, versus 14.2% and 41.5% for the candidate-order baseline, with zero
+illegal-candidate outputs. A concentrated 70k retrain regressed to 42.9%/76.5%,
+so it was rejected. A controlled 55k mix recovered and improved the mean to
+59.5%/84.0%.
 
-The next engineering gate is a separate 20k NInfer/DeepSeek portability
-augmentation with new registry metadata styles, followed by a 70k retrain and
-the same frozen suite. A 100k corpus is conditional on that experiment showing
-real external-registry improvement; it is not the next automatic step.
+The accepted 100k line combines the frozen 50k base with 20k targeted and 30k
+balanced portability rows. It validates with 100,000 unique matrix/type/
+instance/question signatures and zero invalid rows. Training uses a balanced
+54k-row subset and reaches 85.5%/96.0% internal Recall@1/Recall@3. On the same
+four unseen registries it reaches 68.5%/88.0% mean Recall@1/Recall@3, with zero
+illegal-candidate outputs. The next gate is runner-contract evaluation on real
+tool execution; more synthetic rows are not yet justified.
 
 ## Current commands
 

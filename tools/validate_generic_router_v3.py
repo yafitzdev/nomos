@@ -6,7 +6,7 @@ import argparse
 import json
 from collections import Counter
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 from fitz_tool.generic_pilot_v3 import (
     GENERIC_COHORT_COUNTS,
@@ -49,7 +49,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Require every accepted row to contain approved NInfer or DeepSeek provenance.",
     )
+    parser.add_argument(
+        "--allow-custom-cohorts",
+        action="store_true",
+        help="Validate an augmentation/training file with custom train-only cohorts.",
+    )
     return parser
+
+
+def _is_training_row(row: Mapping[str, Any]) -> bool:
+    return row.get("evaluation_partition") == "train" or row.get("evaluation_cohort") == "train"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -66,7 +75,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     training_families = {
         tool.tool_family
         for row in rows
-        if row.get("evaluation_cohort") == "train"
+        if _is_training_row(row)
         for tool in ToolRegistry.from_dict(row["tool_registry"]).tools
     }
     heldout_family_families = {
@@ -78,7 +87,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     train_registry_fingerprints = {
         str(row["tool_registry"]["registry_fingerprint"])
         for row in rows
-        if row.get("evaluation_cohort") == "train"
+        if _is_training_row(row)
     }
     heldout_registry_fingerprints = {
         str(row["tool_registry"]["registry_fingerprint"])
@@ -88,7 +97,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     train_sources = {
         source_id
         for row in rows
-        if row.get("evaluation_cohort") == "train"
+        if _is_training_row(row)
         for source_id in row.get("source_card_ids") or []
     }
     heldout_sources = {
@@ -137,10 +146,25 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "mixed",
             }:
                 manifest_errors.append("manifest teacher must identify an approved external teacher")
+    standard_cohorts_present = bool(set(cohort_counts) & set(GENERIC_COHORT_COUNTS))
+    if args.allow_custom_cohorts:
+        cohort_layout_valid = (
+            not standard_cohorts_present
+            or Counter(
+                {name: cohort_counts.get(name, 0) for name in GENERIC_COHORT_COUNTS}
+            )
+            == Counter(GENERIC_COHORT_COUNTS)
+        ) and all(
+            row.get("evaluation_partition") == "train"
+            for row in rows
+            if row.get("evaluation_cohort") not in GENERIC_COHORT_COUNTS
+        )
+    else:
+        cohort_layout_valid = cohort_counts == Counter(GENERIC_COHORT_COUNTS)
     report = {
         "valid": not errors
         and len(rows) == args.expected_count
-        and cohort_counts == Counter(GENERIC_COHORT_COUNTS)
+        and cohort_layout_valid
         and len(type_signatures) == len(set(type_signatures)) == len(rows)
         and len(instance_signatures) == len(set(instance_signatures)) == len(rows)
         and len(matrix_cells) == len(set(matrix_cells)) == len(rows)
@@ -180,7 +204,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "teacher_error_count": len(teacher_errors),
         "manifest": manifest,
         "manifest_errors": manifest_errors,
-        "project_specific_markers": ["fitz", "sage", "bm25"],
+        "project_specific_marker_policy": ["fitz", "sage", "bm25"],
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")

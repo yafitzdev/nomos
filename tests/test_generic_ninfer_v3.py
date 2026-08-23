@@ -94,9 +94,18 @@ def test_portability_augmentation_targets_are_focused_and_fresh() -> None:
             start_index=50000,
             batch_size=1,
             base_ledger=empty_ledger,
+            distribution="focused",
         )
     )[0]
     assert state["evaluation_cohort"] == "portability_augmentation"
     assert state["evaluation_partition"] == "train"
     assert state["tool_registry"]["registry_id"].startswith("augmentation_")
     assert validate_generic_state(state).valid
+
+
+def test_portability_augmentation_balanced_distribution() -> None:
+    targets = _target_sequence(len(TARGET_CAPABILITIES) * 3, seed=11, distribution="balanced")
+    assert len(targets) == len(TARGET_CAPABILITIES) * 3
+    assert {target: targets.count(target) for target in TARGET_CAPABILITIES} == {
+        target: 3 for target in TARGET_CAPABILITIES
+    }

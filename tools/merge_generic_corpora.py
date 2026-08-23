@@ -8,7 +8,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Sequence
 
-from fitz_tool.generic_pilot_v3 import validate_generic_state
+from fitz_tool.generic_pilot_v3 import GENERIC_DATASET_VERSION, validate_generic_state
+from fitz_tool.router_v2 import FEATURE_VERSION
 
 
 UNIQUE_FIELDS = ("decision_state_id", "matrix_cell_id", "type_signature", "instance_signature", "question")
@@ -60,11 +61,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                     teacher_counts[str((row.get("provenance") or {}).get("teacher"))] += 1
 
     manifest = {
+        "dataset_version": GENERIC_DATASET_VERSION,
+        "feature_version": FEATURE_VERSION,
         "count": row_count,
         "inputs": [str(path) for path in input_paths],
         "output": str(args.output),
         "cohort_counts": dict(sorted(cohort_counts.items())),
         "teacher_counts": dict(sorted(teacher_counts.items())),
+        "teacher": next(iter(teacher_counts)) if len(teacher_counts) == 1 else "mixed",
         "unique_fields": list(UNIQUE_FIELDS),
     }
     args.manifest.parent.mkdir(parents=True, exist_ok=True)
@@ -75,4 +79,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
