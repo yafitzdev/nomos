@@ -10,116 +10,18 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Sequence
 
+from fitz_tool.external_registry_fixtures import (
+    EXTERNAL_REGISTRY_STYLES,
+    EXTERNAL_STYLE_TOOL_IDS,
+    TARGET_CAPABILITIES,
+    build_external_registry,
+)
 from fitz_tool.router_v2 import load_router_v2, rank_tools_v2
 from fitz_tool.tool_registry import ToolRegistry
 
 
 DEFAULT_ARTIFACT = Path("artifacts/nomos_generic_ninfer_full.pt")
 DEFAULT_INPUT = Path("data/generated/nomos_generic_ninfer_50000.jsonl")
-DEFAULT_REGISTRY_ID = "external_spectrum_registry"
-
-TARGET_CAPABILITIES = (
-    "plan_retrieval",
-    "list_sources",
-    "search_content",
-    "exact_pattern_search",
-    "search_metadata",
-    "inspect_structured_schema",
-    "search_structured_records",
-    "inspect_document_structure",
-    "search_document_pages",
-    "read_content",
-    "inspect_code_structure",
-    "inspect_evidence",
-    "expand_context",
-    "compare_evidence",
-    "update_requirements",
-    "assess_evidence",
-    "finalize_selection",
-)
-
-TOOL_IDS = (
-    "lumen_route",
-    "quartz_catalog",
-    "ember_probe",
-    "velvet_match",
-    "orbit_index",
-    "harbor_schema",
-    "cinder_rows",
-    "atlas_outline",
-    "ripple_pages",
-    "meadow_reader",
-    "forge_symbols",
-    "mosaic_evidence",
-    "canyon_context",
-    "prism_compare",
-    "ledger_requirements",
-    "signal_assess",
-    "northstar_commit",
-)
-
-DESCRIPTIONS = {
-    "plan_retrieval": "Plan a staged retrieval route from the current research state.",
-    "list_sources": "Enumerate the sources currently available for inspection.",
-    "search_content": "Locate relevant passages in the available source content.",
-    "exact_pattern_search": "Find exact identifiers, phrases, or literal patterns.",
-    "search_metadata": "Filter and search source metadata and catalog fields.",
-    "inspect_structured_schema": "Inspect fields, types, and structure of tabular data.",
-    "search_structured_records": "Filter and retrieve matching structured records.",
-    "inspect_document_structure": "Inspect headings, sections, and document organization.",
-    "search_document_pages": "Locate relevant pages or page ranges in a document.",
-    "read_content": "Read the full content of a selected source.",
-    "inspect_code_structure": "Inspect symbols, definitions, and code relationships.",
-    "inspect_evidence": "Inspect evidence support, provenance, and verification details.",
-    "expand_context": "Expand a partial or ambiguous result with surrounding context.",
-    "compare_evidence": "Compare conflicting evidence and identify meaningful differences.",
-    "update_requirements": "Update requirement coverage and remaining obligations.",
-    "assess_evidence": "Assess whether the available evidence is sufficient.",
-    "finalize_selection": "Finalize the best-supported selection when requirements are met.",
-}
-
-
-def _external_registry() -> ToolRegistry:
-    tools: list[dict[str, Any]] = []
-    for tool_id, capability in zip(TOOL_IDS, TARGET_CAPABILITIES):
-        tools.append(
-            {
-                "tool_id": tool_id,
-                "tool_family": f"external_{capability}",
-                "description": DESCRIPTIONS[capability],
-                "capabilities": [capability],
-                "input_modalities": ["text"],
-                "output_modalities": [
-                    "records"
-                    if "structured" in capability
-                    else "passages"
-                    if capability not in {"list_sources", "plan_retrieval", "update_requirements"}
-                    else "structured_summary"
-                ],
-                "evidence_roles": [
-                    "planning"
-                    if capability == "plan_retrieval"
-                    else "selection"
-                    if capability == "finalize_selection"
-                    else "observation"
-                ],
-                "side_effect_class": "none",
-                "argument_schema": {
-                    "type": "object",
-                    "properties": {"request": {"type": "string"}},
-                    "required": ["request"],
-                },
-                "constraints": ["read_only"],
-                "prerequisites": ["none"],
-            }
-        )
-    return ToolRegistry.from_dict(
-        {
-            "schema_version": "tool-registry.v2",
-            "registry_id": DEFAULT_REGISTRY_ID,
-            "tools": tools,
-        }
-    )
 
 
 def _read_external_rows(path: Path, limit: int) -> list[dict[str, Any]]:
@@ -143,13 +45,14 @@ def _external_state(
     row: dict[str, Any],
     registry: ToolRegistry,
     *,
+    target_ids: tuple[str, ...],
     seed: int,
     index: int,
 ) -> tuple[dict[str, Any], str]:
     target = str((row.get("sampling_context") or {}).get("target_capability"))
     if target not in TARGET_CAPABILITIES:
         raise ValueError(f"unsupported target capability in row: {target}")
-    target_id = TOOL_IDS[TARGET_CAPABILITIES.index(target)]
+    target_id = target_ids[TARGET_CAPABILITIES.index(target)]
     distractors = [tool.tool_id for tool in registry.tools if tool.tool_id != target_id]
     random.Random(seed + index * 7919).shuffle(distractors)
     legal_ids = [target_id, *distractors[:6]]
@@ -220,6 +123,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--limit", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=20260824)
+    parser.add_argument(
+        "--styles",
+        nargs="+",
+        choices=sorted(EXTERNAL_REGISTRY_STYLES),
+        default=list(EXTERNAL_REGISTRY_STYLES),
+    )
     return parser
 
 
@@ -228,33 +137,40 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.limit < 1:
         raise SystemExit("--limit must be positive")
     model, metadata = load_router_v2(str(args.artifact))
-    registry = _external_registry()
     source_rows = _read_external_rows(args.input, args.limit)
-    rows: list[dict[str, Any]] = []
-    for index, source_row in enumerate(source_rows):
-        state, _ = _external_state(source_row, registry, seed=args.seed, index=index)
-        rows.append(state)
-    report: dict[str, Any] = {
-        "artifact": str(args.artifact),
-        "registry_id": registry.registry_id,
-        "registry_fingerprint": registry.fingerprint,
-        "registry_tool_ids_are_unseen": True,
-        "source_cohort": "heldout_questions",
-        "candidate_order_baseline": _candidate_order_metrics(rows),
-        "metrics": _metrics(rows, model, metadata),
-        "by_target_capability": {},
-    }
-    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for row in rows:
-        target = str((row.get("sampling_context") or {}).get("target_capability"))
-        groups[target].append(row)
-    for target, target_rows in sorted(groups.items()):
-        report["by_target_capability"][target] = _metrics(target_rows, model, metadata)
+    report: dict[str, Any] = {"artifact": str(args.artifact), "source_cohort": "heldout_questions", "registries": {}}
+    for style in args.styles:
+        registry = build_external_registry(style)
+        target_ids = EXTERNAL_STYLE_TOOL_IDS[style]
+        rows: list[dict[str, Any]] = []
+        for index, source_row in enumerate(source_rows):
+            state, _ = _external_state(
+                source_row, registry, target_ids=target_ids, seed=args.seed, index=index
+            )
+            rows.append(state)
+        registry_report: dict[str, Any] = {
+            "registry_id": registry.registry_id,
+            "registry_fingerprint": registry.fingerprint,
+            "registry_tool_ids_are_unseen": True,
+            "candidate_order_baseline": _candidate_order_metrics(rows),
+            "metrics": _metrics(rows, model, metadata),
+            "by_target_capability": {},
+        }
+        groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in rows:
+            target = str((row.get("sampling_context") or {}).get("target_capability"))
+            groups[target].append(row)
+        for target, target_rows in sorted(groups.items()):
+            registry_report["by_target_capability"][target] = _metrics(target_rows, model, metadata)
+        report["registries"][style] = registry_report
     if args.output is not None:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(report, indent=2, sort_keys=True))
-    return 0 if report["metrics"]["invalid_candidate_rate"] == 0.0 else 1
+    return 0 if all(
+        item["metrics"]["invalid_candidate_rate"] == 0.0
+        for item in report["registries"].values()
+    ) else 1
 
 
 if __name__ == "__main__":

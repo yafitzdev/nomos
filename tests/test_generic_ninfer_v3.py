@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 
 import tools.generate_generic_ninfer_v3 as ninfer
+from tools.generate_portability_augmentation import _skeleton_batches, _target_sequence
+from fitz_tool.generic_pilot_v3 import TARGET_CAPABILITIES
 from fitz_tool.generic_pilot_v3 import validate_generic_state
 
 
@@ -65,3 +67,36 @@ def test_resume_reader_repairs_invalid_and_duplicate_rows(tmp_path: Path) -> Non
     retained = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
     assert retained == [{"decision_state_id": "row-1"}, {"decision_state_id": "row-2"}]
     assert list(tmp_path.glob("resume.resume-backup-*.jsonl"))
+
+
+def test_portability_augmentation_targets_are_focused_and_fresh() -> None:
+    targets = _target_sequence(20_000, seed=11)
+    assert len(targets) == 20_000
+    assert targets.count("compare_evidence") == 5_000
+    assert targets.count("search_content") == 4_000
+    assert set(targets) <= set(TARGET_CAPABILITIES)
+
+    empty_ledger = {
+        field: set()
+        for field in (
+            "decision_state_id",
+            "matrix_cell_id",
+            "type_signature",
+            "instance_signature",
+            "question",
+            "teacher_paraphrase",
+        )
+    }
+    state = next(
+        _skeleton_batches(
+            count=1,
+            seed=11,
+            start_index=50000,
+            batch_size=1,
+            base_ledger=empty_ledger,
+        )
+    )[0]
+    assert state["evaluation_cohort"] == "portability_augmentation"
+    assert state["evaluation_partition"] == "train"
+    assert state["tool_registry"]["registry_id"].startswith("augmentation_")
+    assert validate_generic_state(state).valid

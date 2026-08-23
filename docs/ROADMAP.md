@@ -106,9 +106,16 @@ The active generic line is complete through the first training/evaluation gate:
   IDs, 81.0% for unseen question templates and 88.3% for unseen sources.
   Candidate-order, renamed-ID and sampling-context invariance all pass.
 
-The next engineering gate is integration testing against external runner
-contracts and a real unseen registry supplied by another agent, not more
-Fitz-Sage-specific training data.
+The first external portability gate is now complete. A frozen four-registry
+suite reaches a mean 57.2% Recall@1 and 83.5% Recall@3, versus 14.2% and 41.5%
+for the candidate-order baseline, with zero illegal-candidate outputs. The
+weakest capabilities are `compare_evidence`, `search_content`,
+`search_metadata` and `exact_pattern_search`.
+
+The next engineering gate is a separate 20k NInfer/DeepSeek portability
+augmentation with new registry metadata styles, followed by a 70k retrain and
+the same frozen suite. A 100k corpus is conditional on that experiment showing
+real external-registry improvement; it is not the next automatic step.
 
 ## Current commands
 

@@ -64,12 +64,15 @@ rate. On holdouts, Recall@1 is 84.7% for the held-out tool family, 86.3% for
 unseen tool IDs, 81.0% for held-out question templates and 88.3% for held-out
 sources. Registry/order/ID invariance checks pass.
 
-An additional external-registry smoke test uses 1,000 held-out questions with
-a hand-authored registry, new tool IDs and new tool-family names. The router
-reaches 64.4% Recall@1 and 86.7% Recall@3, versus 14.2% and 41.5% for the
-shuffled candidate-order baseline, with zero illegal-candidate outputs. This
-is useful evidence of transfer, but also the next weakness to address: the
-external registry score is below the internal synthetic score.
+The external-registry suite now uses 1,000 held-out questions against four
+hand-authored registry styles with new IDs, families, descriptions, schemas and
+modalities. Recall@1/Recall@3 is 65.6%/85.5% for `spectrum`, 54.9%/79.4% for
+`quarry`, 53.5%/84.7% for `weave`, and 54.9%/84.5% for `relay`; the mean is
+57.2%/83.5%. The shuffled candidate-order baseline is 14.2%/41.5%, and the
+illegal-candidate rate is 0% for every registry. This proves useful transfer,
+but also identifies a portability gap—especially `compare_evidence`,
+`search_content`, `search_metadata` and `exact_pattern_search`—that should be
+addressed before scaling the corpus to 100k.
 
 ## Commands
 
@@ -107,6 +110,29 @@ Validate the complete corpus:
 python -m tools.validate_generic_router_v3 --input data/generated/nomos_generic_ninfer_50000.jsonl --manifest runs/nomos_generic_ninfer_50000_manifest.json --require-external-teacher --report runs/nomos_generic_ninfer_50000_validation.json
 python -m tools.audit_generic_ninfer_sample --input data/generated/nomos_generic_ninfer_50000.jsonl --sample-size 100 --seed 20260824 --output runs/nomos_generic_ninfer_50000_sample_audit.json
 python -m tools.test_external_registry --artifact artifacts/nomos_generic_ninfer_full.pt --input data/generated/nomos_generic_ninfer_50000.jsonl --output runs/nomos_generic_external_registry_test.json --limit 1000 --seed 20260824
+```
+
+Generate the separate, targeted portability augmentation after a fresh teacher
+credential is available. It preserves the 50k file and creates 20k new,
+matrix-unique training rows; the local NInfer command is shown here, while the
+same tool accepts `--teacher deepseek` for an API-backed run:
+
+```text
+python -m tools.generate_portability_augmentation --base-input data/generated/nomos_generic_ninfer_50000.jsonl --count 20000 --start-index 50000 --seed 20260824 --batch-size 4 --concurrency 4 --no-api-key --output data/generated/nomos_generic_portability_augmentation_20000.jsonl --manifest runs/nomos_generic_portability_augmentation_20000_manifest.json
+```
+
+The next experiment is a 70k combined training line (the frozen 50k plus the
+20k augmentation). Scale to 100k only if that checkpoint improves the same
+frozen four-registry suite; otherwise refine the registry features or matrix
+instead of adding more rows from the same distribution.
+
+Merge and train that comparison line only after the augmentation validator
+passes:
+
+```text
+python -m tools.merge_generic_corpora --input data/generated/nomos_generic_ninfer_50000.jsonl --input data/generated/nomos_generic_portability_augmentation_20000.jsonl --output data/generated/nomos_generic_portability_70000.jsonl --manifest runs/nomos_generic_portability_70000_manifest.json
+python -m tools.train_encoder_v2 --input data/generated/nomos_generic_portability_70000.jsonl --output artifacts/nomos_generic_portability_70000.pt --train-count 54000 --epochs 12 --feature-dim 512 --hidden-dim 128 --learning-rate 0.002 --seed 20260824 --batch-size 4096
+python -m tools.test_external_registry --artifact artifacts/nomos_generic_portability_70000.pt --input data/generated/nomos_generic_portability_70000.jsonl --output runs/nomos_generic_portability_70000_external_registry.json --limit 1000 --seed 20260824
 ```
 
 Train and evaluate only after validation passes:
