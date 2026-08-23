@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fitz-tool.local/schema/matrix.v2.json",
+  "title": "Capability-oriented generation matrix",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["matrix_version", "dimensions", "observable_ranges", "model_input_policy", "holdout_axes"],
+  "properties": {
+    "matrix_version": {"const": "matrix.v2"},
+    "dimensions": {
+      "type": "object",
+      "minProperties": 16,
+      "additionalProperties": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true
+      }
+    },
+    "observable_ranges": {
+      "type": "object",
+      "minProperties": 5,
+      "additionalProperties": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": {"type": "integer", "minimum": 0}
+      }
+    },
+    "model_input_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runtime_observable_fields", "sampling_only_dimensions"],
+      "properties": {
+        "runtime_observable_fields": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "sampling_only_dimensions": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}
+      }
+    },
+    "holdout_axes": {
+      "type": "array",
+      "minItems": 5,
+      "uniqueItems": true,
+      "items": {"type": "string"}
+    }
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fitz-tool.local/schema/trajectory.v1.json",
+  "title": "Fitz-Sage V2 external trajectory contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "trajectory_id",
+    "scenario_id",
+    "runner",
+    "events",
+    "terminal_result",
+    "provenance"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "trajectory.v1"
+    },
+    "trajectory_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scenario_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "question": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "contract_version"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contract_version": {
+          "const": "runner.v1"
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["step", "kind"],
+        "properties": {
+          "step": {
+            "type": "integer",
+            "minimum": 0
+          },
+            "kind": {
+              "type": "string",
+            "enum": ["state", "decision", "tool_call", "tool_result", "governance", "terminal", "error"]
+          }
+        }
+      }
+    },
+    "terminal_result": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["trajectory_accepted", "rejection_reasons"],
+      "properties": {
+        "trajectory_accepted": {
+          "type": "boolean"
+        },
+        "rejection_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["captured_at"],
+      "properties": {
+        "captured_at": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

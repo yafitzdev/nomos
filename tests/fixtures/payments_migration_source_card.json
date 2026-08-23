@@ -1,0 +1,36 @@
+{
+  "schema_version": "source-card.v1",
+  "source_id": "fixture-payments-migration",
+  "document_id": "payments-migration-guide",
+  "title": "Payments API migration guide",
+  "modality": "text",
+  "content_sha256": "e2bbd3cf101c516bba3e0d38c6607c0a5decc17916788c9fd5d66f693f016fdf",
+  "normalized_content_sha256": "5667f0255b555141cedb9ed577d3fc79a815cea6349d1f1c37bf92a8974deda3",
+  "facts": [
+    {
+      "fact_id": "oauth-expiry",
+      "statement": "OAuth access tokens expire after 45 minutes.",
+      "claim_type": "lifetime"
+    },
+    {
+      "fact_id": "refresh-rotation",
+      "statement": "Refresh tokens are single-use and rotate after every successful refresh.",
+      "claim_type": "rotation"
+    },
+    {
+      "fact_id": "auth-409",
+      "statement": "AUTH-409 means a previously consumed refresh token was reused.",
+      "claim_type": "error"
+    },
+    {
+      "fact_id": "revoke-session",
+      "statement": "The incident runbook says to revoke the session and require fresh authorization.",
+      "claim_type": "remediation"
+    }
+  ],
+  "metadata": {
+    "fixture": true,
+    "purpose": "pilot teacher generation and external-runner smoke only",
+    "source_path": "tests/fixtures/pilot_corpus/payments_migration.md"
+  }
+}

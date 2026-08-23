@@ -1,0 +1,129 @@
+{
+  "matrix_version": "matrix.v1",
+  "dimensions": {
+    "integration_domain": [
+      "auth",
+      "payments",
+      "refunds",
+      "webhooks",
+      "schemas",
+      "errors",
+      "migrations",
+      "security",
+      "reconciliation"
+    ],
+    "information_operation": [
+      "lookup",
+      "enumerate",
+      "compare",
+      "join",
+      "latest_value_selection",
+      "compatibility",
+      "contradiction",
+      "absence"
+    ],
+    "source_modality": [
+      "text",
+      "pdf",
+      "csv",
+      "excel",
+      "sqlite",
+      "code",
+      "mixed"
+    ],
+    "evidence_topology": [
+      "one_passage",
+      "multiple_passages",
+      "complementary_sources",
+      "cross_format",
+      "contradictory",
+      "absent"
+    ],
+    "retrieval_obstacle": [
+      "none",
+      "paraphrase",
+      "acronym",
+      "identifier_variation",
+      "near_duplicate",
+      "long_document_needle",
+      "split_context",
+      "version_noise"
+    ],
+    "agent_state": [
+      "initial",
+      "no_hits",
+      "noisy_hits",
+      "partial_evidence",
+      "expansion_needed",
+      "contradiction",
+      "insufficient",
+      "disputed",
+      "fresh_sufficient"
+    ],
+    "next_tool_target": [
+      "set_retrieval_plan",
+      "search_bm25",
+      "grep_search",
+      "search_metadata",
+      "list_sources",
+      "list_tabular_sources",
+      "inspect_table_schema",
+      "search_table_rows",
+      "list_pdf_sources",
+      "inspect_pdf_structure",
+      "search_pdf_pages",
+      "read_file",
+      "inspect_code",
+      "inspect_evidence",
+      "expand_context",
+      "compare_evidence",
+      "update_requirement_progress",
+      "assess_evidence",
+      "finalize_document_selection"
+    ],
+    "governance_path": [
+      "sufficient",
+      "insufficient_to_sufficient",
+      "repeated_insufficient",
+      "disputed_to_sufficient",
+      "sufficient_to_disputed",
+      "stale_assessment"
+    ],
+    "terminal_condition": [
+      "ongoing",
+      "selection",
+      "abstention",
+      "clarification",
+      "unresolved_contradiction",
+      "step_limit_termination"
+    ],
+    "resource_pressure_band": [
+      "low",
+      "medium",
+      "high"
+    ]
+  },
+  "sampling_profile": {
+    "terminal_condition_profile": [
+      "ongoing",
+      "ongoing",
+      "ongoing",
+      "ongoing",
+      "ongoing",
+      "ongoing",
+      "ongoing",
+      "ongoing",
+      "ongoing",
+      "ongoing",
+      "ongoing",
+      "ongoing",
+      "ongoing",
+      "ongoing",
+      "selection",
+      "abstention",
+      "clarification",
+      "unresolved_contradiction",
+      "step_limit_termination"
+    ]
+  }
+}

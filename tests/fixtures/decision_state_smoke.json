@@ -1,0 +1,23 @@
+{
+  "accepted": true,
+  "agent_state": {"state_name": "initial"},
+  "decision_state_id": "decision-smoke-1",
+  "governance": {"assessment_fresh": false, "requirements": []},
+  "label": {
+    "acceptable_tools": ["search_bm25"],
+    "hard_negative_tools": ["grep_search"],
+    "label_source": "deterministic_execution",
+    "ranked_tools": ["search_bm25", "grep_search"]
+  },
+  "legal_tools": ["search_bm25", "grep_search"],
+  "observed_evidence": [],
+  "provenance": {
+    "trajectory_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "validator_version": "decision-labels.v1"
+  },
+  "question": "Which retrieval action should happen first?",
+  "scenario_id": "scenario-smoke-1",
+  "schema_version": "decision-state.v1",
+  "step": 0,
+  "trajectory_id": "trajectory-smoke-1"
+}

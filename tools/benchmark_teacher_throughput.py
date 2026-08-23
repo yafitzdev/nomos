@@ -15,8 +15,10 @@ from dataclasses import dataclass
 from typing import Sequence
 
 
-DEFAULT_BASE_URL = "https://yan.tail85512d.ts.net/v1"
-DEFAULT_MODEL = "qwen3.8-27b-nvfp4"
+DEFAULT_BASE_URL = os.environ.get(
+    "FITZ_TOOL_TEACHER_BASE_URL", "http://127.0.0.1:19003/v1"
+)
+DEFAULT_MODEL = os.environ.get("FITZ_TOOL_TEACHER_MODEL", "qwen3.8-27b-nvfp4")
 
 
 @dataclass(frozen=True)
@@ -54,7 +56,9 @@ def build_parser() -> argparse.ArgumentParser:
 def _api_key(*, disabled: bool) -> str | None:
     if disabled:
         return None
-    key = os.environ.get("FITZ_AGENT_TEACHER_API_KEY")
+    key = os.environ.get("FITZ_TOOL_TEACHER_API_KEY") or os.environ.get(
+        "FITZ_AGENT_TEACHER_API_KEY"
+    )
     if key:
         return key
     return getpass.getpass("Teacher API key: ")
@@ -319,5 +323,4 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
 

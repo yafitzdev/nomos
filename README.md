@@ -1,7 +1,8 @@
-# Fitz-Tool
+# Nomos / Fitz-Tool
 
-Fitz-Tool is the data-generation and learned-routing companion for Fitz-Sage:
-a portfolio artifact for making technical research agents better at choosing
+Nomos is the learned tool-routing model line built by Fitz-Tool. Fitz-Tool is
+the data-generation, validation and training companion for Fitz-Sage: a
+portfolio artifact for making technical research agents better at choosing
 their next tool.
 
 The core research question is:
@@ -19,6 +20,17 @@ question + agent state + legal tool schemas
 
 Pi, the language model and the deterministic controller remain responsible
 for tool execution, arguments, provenance, governance and final selection.
+
+## Generic router v2
+
+The repository now includes a side-by-side `router.v2` foundation for Nomos.
+External agents supply a versioned tool registry plus their current legal
+candidate set. V2 scores capability, description, modality, evidence-role,
+side-effect and schema metadata without learning the literal tool ID.
+
+See `docs/GENERIC_ROUTER_V2.md` for the architecture and matrix refinements.
+The paste-ready pilot/training request is in `docs/GENERIC_ROUTER_GOAL.md`.
+V1 code and artifacts remain supported and unchanged.
 
 ## Repository layout
 
@@ -61,6 +73,11 @@ Use environment variables or an ignored local `.env` file. Never commit keys.
 FITZ_TOOL_TEACHER_BASE_URL=http://127.0.0.1:19003/v1
 FITZ_TOOL_TEACHER_MODEL=qwen3.8-27b-nvfp4
 FITZ_TOOL_TEACHER_API_KEY=
+
+# Optional external breadth teacher; keep the key in an ignored local .env.
+FITZ_TOOL_DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
+FITZ_TOOL_DEEPSEEK_MODEL=deepseek-chat
+FITZ_TOOL_DEEPSEEK_API_KEY=
 ```
 
 The local NInfer teacher is a data-generation dependency only. It is not the

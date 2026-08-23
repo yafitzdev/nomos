@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fitz-tool.local/schema/decision_state.v1.json",
+  "title": "Fitz-Tool accepted decision state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "decision_state_id",
+    "trajectory_id",
+    "scenario_id",
+    "step",
+    "question",
+    "agent_state",
+    "legal_tools",
+    "observed_evidence",
+    "governance",
+    "label",
+    "accepted",
+    "provenance"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "decision-state.v1"
+    },
+    "decision_state_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trajectory_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scenario_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "step": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "question": {
+      "type": "string",
+      "minLength": 1
+    },
+    "agent_state": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["state_name"],
+      "properties": {
+        "state_name": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "plan": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "matrix_context": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "legal_tools": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "observed_evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["evidence_id"],
+        "properties": {
+          "evidence_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "governance": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["assessment_fresh", "requirements"],
+      "properties": {
+        "assessment_fresh": {
+          "type": "boolean"
+        },
+        "requirements": {
+          "type": "array"
+        }
+      }
+    },
+    "label": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["acceptable_tools", "ranked_tools", "hard_negative_tools", "label_source"],
+      "properties": {
+        "acceptable_tools": {
+          "type": "array",
+          "minItems": 0,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "ranked_tools": {
+          "type": "array",
+          "minItems": 0,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "hard_negative_tools": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "label_source": {
+          "const": "deterministic_execution"
+        }
+      }
+    },
+    "accepted": {
+      "type": "boolean"
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["trajectory_hash", "validator_version"],
+      "properties": {
+        "trajectory_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "validator_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fitz-tool.local/schema/decision_state.v2.json",
+  "title": "Registry-aware router training decision state",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "decision_state_id",
+    "trajectory_id",
+    "scenario_id",
+    "question",
+    "agent_state",
+    "history",
+    "observed_evidence",
+    "governance",
+    "resource_state",
+    "source_state",
+    "query_state",
+    "tool_registry",
+    "legal_candidate_ids",
+    "label",
+    "provenance"
+  ],
+  "properties": {
+    "schema_version": {"const": "decision-state.v2"},
+    "decision_state_id": {"type": "string", "minLength": 1},
+    "trajectory_id": {"type": "string", "minLength": 1},
+    "scenario_id": {"type": "string", "minLength": 1},
+    "step": {"type": "integer", "minimum": 0},
+    "question": {"type": "string", "minLength": 1},
+    "agent_state": {"type": "object"},
+    "history": {"type": "array"},
+    "plan": {"type": "object"},
+    "observed_evidence": {"type": "array"},
+    "governance": {"type": "object"},
+    "resource_state": {"type": "object"},
+    "source_state": {"type": "object"},
+    "query_state": {"type": "object"},
+    "tool_registry": {"$ref": "tool_registry.v2.json"},
+    "legal_candidate_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "label": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["acceptable_tools", "ranked_tools", "hard_negative_tools", "label_source"],
+      "properties": {
+        "acceptable_tools": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "ranked_tools": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "hard_negative_tools": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "label_source": {"type": "string", "minLength": 1}
+      }
+    },
+    "sampling_context": {"type": "object"},
+    "evaluation_partition": {"enum": ["train", "validation", "test"]},
+    "provenance": {
+      "type": "object",
+      "required": ["trajectory_hash", "registry_fingerprint", "matrix_cell_id", "feature_version", "validator_version"]
+    }
+  }
+}
