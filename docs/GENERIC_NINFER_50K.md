@@ -64,6 +64,13 @@ rate. On holdouts, Recall@1 is 84.7% for the held-out tool family, 86.3% for
 unseen tool IDs, 81.0% for held-out question templates and 88.3% for held-out
 sources. Registry/order/ID invariance checks pass.
 
+An additional external-registry smoke test uses 1,000 held-out questions with
+a hand-authored registry, new tool IDs and new tool-family names. The router
+reaches 64.4% Recall@1 and 86.7% Recall@3, versus 14.2% and 41.5% for the
+shuffled candidate-order baseline, with zero illegal-candidate outputs. This
+is useful evidence of transfer, but also the next weakness to address: the
+external registry score is below the internal synthetic score.
+
 ## Commands
 
 Smoke test the live teacher:
@@ -99,6 +106,7 @@ Validate the complete corpus:
 ```text
 python -m tools.validate_generic_router_v3 --input data/generated/nomos_generic_ninfer_50000.jsonl --manifest runs/nomos_generic_ninfer_50000_manifest.json --require-external-teacher --report runs/nomos_generic_ninfer_50000_validation.json
 python -m tools.audit_generic_ninfer_sample --input data/generated/nomos_generic_ninfer_50000.jsonl --sample-size 100 --seed 20260824 --output runs/nomos_generic_ninfer_50000_sample_audit.json
+python -m tools.test_external_registry --artifact artifacts/nomos_generic_ninfer_full.pt --input data/generated/nomos_generic_ninfer_50000.jsonl --output runs/nomos_generic_external_registry_test.json --limit 1000 --seed 20260824
 ```
 
 Train and evaluate only after validation passes:
