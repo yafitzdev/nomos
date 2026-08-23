@@ -21,6 +21,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PILOT_VERSION = "pilot.v2"
 PILOT_SEED = 20260823
 FIXED_GENERATED_AT = "2026-08-23T00:00:00+00:00"
+FROZEN_PILOT_FEATURE_VERSION = "registry-features.v2.1"
 TARGET_CAPABILITIES = tuple(load_matrix_v2_spec()["dimensions"]["target_capability"])
 
 COHORT_COUNTS = {
@@ -35,6 +36,12 @@ COHORT_COUNTS = {
     "heldout_sources": 50,
     "heldout_questions": 50,
     "alternate_registry": 100,
+}
+
+SCALE_PILOT_VERSION = "pilot.v2.scale30k"
+SCALE_PILOT_SEED = 20260923
+SCALE_COHORT_COUNTS = {
+    cohort: count * 6 for cohort, count in COHORT_COUNTS.items()
 }
 
 SOURCE_BLUEPRINTS = (
@@ -440,6 +447,7 @@ def _build_state(
     template_id: str,
     split_group_id: str,
     seed: int,
+    feature_version: str = FROZEN_PILOT_FEATURE_VERSION,
 ) -> dict[str, Any]:
     rng = random.Random(seed)
     source_ids = _source_ids_for_cell(cell.values, cards, cohort)
@@ -500,7 +508,7 @@ def _build_state(
                 "teacher": "deterministic_matrix_oracle",
                 "seed": seed,
                 "validator_version": "pilot-validator.v2",
-                "feature_version": FEATURE_VERSION,
+                "feature_version": feature_version,
                 "registry_fingerprint": registry.fingerprint,
                 "trajectory_hash": _sha256({"trajectory_id": f"pilot-v2-trajectory-{index:05d}", "seed": seed}),
                 "matrix_cell_id": cell.cell_id,
@@ -664,6 +672,114 @@ def generate_pilot_states(
         "source_cards": {source_id: card.as_dict() for source_id, card in cards.items()},
         "type_signatures": len(used_types),
         "instance_signatures": len(used_instances),
+    }
+    return rows, manifest
+
+
+def generate_scaled_pilot_states(
+    *,
+    count: int = sum(SCALE_COHORT_COUNTS.values()),
+    seed: int = SCALE_PILOT_SEED,
+    root: Path | str = PROJECT_ROOT,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Generate the post-gate 30,000-state deterministic matrix pilot."""
+
+    if count != sum(SCALE_COHORT_COUNTS.values()):
+        raise ValueError(
+            f"{SCALE_PILOT_VERSION} requires exactly {sum(SCALE_COHORT_COUNTS.values())} rows"
+        )
+    if SCALE_COHORT_COUNTS["train"] % len(TARGET_CAPABILITIES):
+        raise ValueError("scaled training count must divide evenly across target capabilities")
+    root = Path(root)
+    spec = load_matrix_v2_spec(root / "configs" / "matrix.v2.json")
+    cards = load_pilot_source_cards(root / "tests" / "fixtures" / "pilot_v2_corpus")
+    registries = load_pilot_registries(root)
+    base = registries["fitz_sage_v2"]
+    alternate = registries["alternate_research_agent_v2"]
+    heldout = registries["heldout_research_tools_v2"]
+    registry_by_cohort = {
+        "train": base,
+        "validation": base,
+        "familiar_tools": base,
+        "unseen_tool_ids": renamed_registry(base, "novel", alter_descriptions=True),
+        "id_renames": renamed_registry(base, "renamed"),
+        "schema_variants": schema_variant_registry(base),
+        "modality_variants": modality_variant_registry(base),
+        "heldout_family": heldout,
+        "heldout_sources": base,
+        "heldout_questions": base,
+        "alternate_registry": alternate,
+    }
+    rng = random.Random(seed)
+    used_cells: set[str] = set()
+    used_types: set[str] = set()
+    used_instances: set[str] = set()
+    rows: list[dict[str, Any]] = []
+    index = 0
+    for cohort, cohort_count in SCALE_COHORT_COUNTS.items():
+        registry = registry_by_cohort[cohort]
+        targets = _cohort_targets(cohort, cohort_count, registry)
+        if cohort == "train":
+            per_target = cohort_count // len(TARGET_CAPABILITIES)
+            targets = [
+                capability
+                for capability in TARGET_CAPABILITIES
+                for _ in range(per_target)
+            ]
+        for offset, target in enumerate(targets):
+            row_seed = seed + index * 1009 + offset
+            cell = _valid_cell_for_target(rng, target, used_cells, spec)
+            used_cells.add(cell.cell_id)
+            template_pool = (
+                HOLDOUT_TEMPLATE_IDS if cohort == "heldout_questions" else TRAIN_TEMPLATE_IDS
+            )
+            template_id = template_pool[offset % len(template_pool)]
+            split_group = (
+                f"{cohort}|source-group-{offset % 16}|"
+                f"template-group-{offset % len(template_pool)}"
+            )
+            row = _build_state(
+                index=index,
+                cohort=cohort,
+                target_capability=target,
+                registry=registry,
+                cell=cell,
+                cards=cards,
+                template_id=template_id,
+                split_group_id=split_group,
+                seed=row_seed,
+                feature_version=FEATURE_VERSION,
+            )
+            if row["type_signature"] in used_types:
+                raise ValueError(f"duplicate scaled type signature at row {index}")
+            if row["instance_signature"] in used_instances:
+                raise ValueError(f"duplicate scaled instance signature at row {index}")
+            used_types.add(row["type_signature"])
+            used_instances.add(row["instance_signature"])
+            rows.append(row)
+            index += 1
+    target_counts = Counter(
+        str((row.get("sampling_context") or {}).get("target_capability")) for row in rows
+    )
+    manifest = {
+        "pilot_version": SCALE_PILOT_VERSION,
+        "seed": seed,
+        "count": len(rows),
+        "cohort_counts": dict(Counter(row["evaluation_cohort"] for row in rows)),
+        "target_capability_counts": dict(sorted(target_counts.items())),
+        "registry_fingerprints": {
+            registry_id: registry.fingerprint for registry_id, registry in registries.items()
+        },
+        "registry_variants": {
+            "unseen_tool_ids": registry_by_cohort["unseen_tool_ids"].fingerprint,
+            "id_renames": registry_by_cohort["id_renames"].fingerprint,
+            "schema_variants": registry_by_cohort["schema_variants"].fingerprint,
+            "modality_variants": registry_by_cohort["modality_variants"].fingerprint,
+        },
+        "source_cards": {source_id: card.as_dict() for source_id, card in cards.items()},
+        "type_signatures": len(used_types),
+        "instance_signatures": len(used_instances),
+        "feature_version": FEATURE_VERSION,
     }
     return rows, manifest
 

@@ -1,0 +1,34 @@
+{
+  "version": "question-generalization.v1",
+  "purpose": "Derived training and held-out question views for the frozen router.v2 pilot.",
+  "training_template_families": [
+    "indirect",
+    "paraphrase",
+    "compositional",
+    "capability_implied",
+    "stateful",
+    "contrastive",
+    "evidence",
+    "constraint"
+  ],
+  "heldout_template_families": [
+    "indirect",
+    "compositional",
+    "consequence",
+    "constraint"
+  ],
+  "leakage_policy": {
+    "forbidden": [
+      "canonical target_capability identifier",
+      "canonical target capability phrase",
+      "CAPABILITY_FOCUS phrase from pilot.v2"
+    ],
+    "allowed": [
+      "observable workflow context",
+      "evidence outcomes",
+      "source and modality constraints",
+      "paraphrased capability implications"
+    ]
+  },
+  "frozen_benchmark_policy": "The original 5,000-row pilot is read-only; only a derived view may change questions."
+}

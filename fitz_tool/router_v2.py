@@ -15,26 +15,60 @@ from .tool_registry import ToolRegistry, ToolSpec
 
 TOKEN_RE = re.compile(r"[a-zA-Z0-9_]+")
 ROUTER_VERSION = "router.v2"
-FEATURE_VERSION = "registry-features.v2.1"
+FEATURE_VERSION = "registry-features.v2.2"
 
 QUESTION_INTENT_CUES: dict[str, tuple[str, ...]] = {
-    "plan_retrieval": ("plan", "planning", "approach", "strategy"),
-    "list_sources": ("list", "available", "inventory"),
-    "search_content": ("passage", "content", "documented"),
-    "exact_pattern_search": ("exact", "identifier", "phrase"),
-    "search_metadata": ("metadata", "catalog"),
-    "inspect_structured_schema": ("schema", "column", "field", "fields"),
-    "search_structured_records": ("record", "row", "filter", "table"),
-    "inspect_document_structure": ("structure", "section", "organization"),
-    "search_document_pages": ("pages", "page-level"),
-    "read_content": ("read", "full", "content"),
-    "inspect_code_structure": ("code", "symbol", "definition", "implementation"),
-    "inspect_evidence": ("evidence", "candidate"),
-    "expand_context": ("context", "snippet", "surrounding", "ambiguous"),
-    "compare_evidence": ("compare", "contradiction", "agreement", "difference"),
-    "update_requirements": ("requirement", "coverage", "progress"),
-    "assess_evidence": ("sufficient", "satisfy", "assessment"),
-    "finalize_selection": ("finalize", "select", "selection"),
+    "plan_retrieval": (
+        "plan", "planning", "approach", "strategy", "sequence", "route", "roadmap"
+    ),
+    "list_sources": (
+        "list", "available", "inventory", "enumerate", "catalog", "catalogue"
+    ),
+    "search_content": (
+        "passage", "content", "documented", "locate", "indexed", "material", "body"
+    ),
+    "exact_pattern_search": (
+        "exact", "identifier", "phrase", "literal", "spelling", "token", "regex", "regular"
+    ),
+    "search_metadata": (
+        "metadata", "catalog", "catalogue", "filter", "filters", "narrow", "constraint"
+    ),
+    "inspect_structured_schema": (
+        "schema", "column", "field", "fields", "types", "table", "layout", "shape"
+    ),
+    "search_structured_records": (
+        "record", "records", "row", "rows", "filter", "filters", "table", "values", "conditions"
+    ),
+    "inspect_document_structure": (
+        "structure", "section", "sections", "organization", "headings", "outline", "map", "landmarks"
+    ),
+    "search_document_pages": (
+        "pages", "page", "page-level", "range", "ranges", "landmark"
+    ),
+    "read_content": (
+        "read", "full", "content", "open", "source", "direct", "contents"
+    ),
+    "inspect_code_structure": (
+        "code", "symbol", "symbols", "definition", "definitions", "implementation", "relationship", "relationships"
+    ),
+    "inspect_evidence": (
+        "evidence", "candidate", "provenance", "support", "trace", "verified"
+    ),
+    "expand_context": (
+        "context", "snippet", "surrounding", "ambiguous", "partial", "incomplete", "truncated", "recover", "widening"
+    ),
+    "compare_evidence": (
+        "compare", "contradiction", "agreement", "difference", "disagree", "conflict", "reconcile", "side-by-side"
+    ),
+    "update_requirements": (
+        "requirement", "requirements", "coverage", "progress", "obligation", "obligations", "checklist", "record"
+    ),
+    "assess_evidence": (
+        "sufficient", "sufficiency", "satisfy", "assessment", "enough", "proof"
+    ),
+    "finalize_selection": (
+        "finalize", "select", "selection", "commit", "chosen", "fresh", "supported", "close"
+    ),
 }
 
 

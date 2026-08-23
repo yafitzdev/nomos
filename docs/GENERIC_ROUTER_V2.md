@@ -67,9 +67,29 @@ The scorer consumes only:
 The scorer does not consume `matrix_context`, `sampling_context`, labels, target
 capability, future governance paths or terminal outcomes. These fields may be
 retained for generation, stratification and audit but are not runtime features.
-The current feature encoder is `registry-features.v2.1`; it adds lexical
+The current feature encoder is `registry-features.v2.2`; it adds lexical
 question-intent/candidate-intent interactions derived from the observable
-question, without reading the matrix target label.
+question, without reading the matrix target label. The intent lexicon includes
+paraphrased evidence outcomes such as page ranges, field layouts, provenance,
+surrounding context and sufficiency; it does not expose a target capability
+field at runtime.
+
+## Question-generalization gate
+
+The original `router_v2_pilot_5000.jsonl` is a frozen benchmark. Its existing
+`heldout_questions` cohort is intentionally retained, including its domain-only
+wording; that cohort is useful as an underspecified negative control. The
+derived `question-generalization.v1` view changes only the questions for
+training and the indirect heldout cohort. It uses eight training surfaces and
+four disjoint holdout surfaces, with a token-level audit rejecting canonical
+target capability phrases.
+
+Training interleaves the original 3,400 training rows with their 3,400
+generalized counterparts. The full checkpoint therefore sees 6,800 training
+states while all frozen validation/test rows remain unchanged. The formal gate
+requires indirect heldout Recall@1 >= 0.70, <= 0.05 Recall@1 regression on
+unseen IDs, renames, heldout families and alternate registries, stable metadata
+ablation, and invariance on both views.
 
 ## Matrix v2 refinements
 
@@ -120,10 +140,24 @@ python -m tools.validate_registry configs/tool_registry.heldout_v2.json
 python -m tools.generate_router_v2_pilot --count 5000 --seed 20260823 --output data/generated/router_v2_pilot_5000.jsonl --manifest runs/router_v2_pilot_5000_manifest.json
 python -m tools.validate_router_v2_pilot --input data/generated/router_v2_pilot_5000.jsonl --expected-count 5000 --min-per-target 200 --report runs/router_v2_pilot_5000_validation.json
 python -m tools.audit_router_v2_holdouts --input data/generated/router_v2_pilot_5000.jsonl --report runs/router_v2_pilot_5000_holdout_audit.json
-python -m tools.train_encoder_v2 --input data/generated/router_v2_pilot_5000.jsonl --output artifacts/router_v2_pilot_full.pt --train-count 3400 --epochs 15 --feature-dim 2048 --hidden-dim 128 --learning-rate 0.002 --seed 20260823
-python -m tools.evaluate_router_v2 --artifact artifacts/router_v2_pilot_full.pt --input data/generated/router_v2_pilot_5000.jsonl --output runs/router_v2_pilot_full_evaluation.json
+python -m tools.generate_router_v2_question_generalization --frozen-input data/generated/router_v2_pilot_5000.jsonl --output data/generated/router_v2_question_generalization_5000.jsonl --manifest runs/router_v2_question_generalization_5000_manifest.json --training-output data/generated/router_v2_question_generalization_training_8400.jsonl --training-manifest runs/router_v2_question_generalization_training_8400_manifest.json
+python -m tools.validate_router_v2_question_generalization --frozen-input data/generated/router_v2_pilot_5000.jsonl --derived-input data/generated/router_v2_question_generalization_5000.jsonl --training-input data/generated/router_v2_question_generalization_training_8400.jsonl --report runs/router_v2_question_generalization_5000_validation.json
+python -m tools.train_encoder_v2 --input data/generated/router_v2_question_generalization_training_8400.jsonl --output artifacts/router_v2_question_generalization_full.pt --train-count 6800 --epochs 30 --feature-dim 2048 --hidden-dim 128 --learning-rate 0.002 --seed 20260823
+python -m tools.evaluate_router_v2 --artifact artifacts/router_v2_question_generalization_full.pt --input data/generated/router_v2_pilot_5000.jsonl --output runs/router_v2_question_generalization_full_frozen_evaluation.json
+python -m tools.evaluate_router_v2 --artifact artifacts/router_v2_question_generalization_full.pt --input data/generated/router_v2_question_generalization_5000.jsonl --output runs/router_v2_question_generalization_full_derived_evaluation.json
+python -m tools.check_router_v2_question_gate --baseline-frozen runs/router_v2_pilot_full_evaluation.json --candidate-frozen runs/router_v2_question_generalization_full_frozen_evaluation.json --candidate-generalized runs/router_v2_question_generalization_full_derived_evaluation.json --report runs/router_v2_question_generalization_full_gate.json
 python -m tools.generate_ninfer_router_v2_slice --count 100 --seed 20260824 --model Qwen/Qwen3.8-27B --no-api-key --batch-size 4 --concurrency 2 --output data/generated/ninfer_router_v2_proposals_100.jsonl
 python -m tools.validate_ninfer_router_v2_slice --input data/generated/ninfer_router_v2_proposals_100.jsonl --expected-count 100 --sample-size 25 --seed 20260824 --report runs/ninfer_router_v2_proposals_100_validation.json
+```
+
+After the question gate passes, the lower-bound scale pilot is:
+
+```text
+python -m tools.generate_router_v2_scale --count 30000 --seed 20260923 --output data/generated/router_v2_scale_30000.jsonl --manifest runs/router_v2_scale_30000_manifest.json
+python -m tools.validate_router_v2_pilot --input data/generated/router_v2_scale_30000.jsonl --expected-count 30000 --min-per-target 1000 --report runs/router_v2_scale_30000_validation.json
+python -m tools.audit_router_v2_holdouts --input data/generated/router_v2_scale_30000.jsonl --report runs/router_v2_scale_30000_holdout_audit.json
+python -m tools.generate_router_v2_question_generalization --frozen-input data/generated/router_v2_scale_30000.jsonl --output data/generated/router_v2_scale_question_generalization_30000.jsonl --manifest runs/router_v2_scale_question_generalization_30000_manifest.json --training-output data/generated/router_v2_scale_question_generalization_training_50400.jsonl --training-manifest runs/router_v2_scale_question_generalization_training_50400_manifest.json --expected-count 30000
+python -m tools.validate_router_v2_question_generalization --frozen-input data/generated/router_v2_scale_30000.jsonl --derived-input data/generated/router_v2_scale_question_generalization_30000.jsonl --training-input data/generated/router_v2_scale_question_generalization_training_50400.jsonl --expected-count 30000 --report runs/router_v2_scale_question_generalization_30000_validation.json
 ```
 
 The adapted V1 rows are useful for compatibility and smoke testing. Because

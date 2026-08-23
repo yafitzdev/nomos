@@ -82,10 +82,24 @@ Generated rows, reports and model artifacts stay ignored by git:
 python -m tools.generate_router_v2_pilot --count 5000 --seed 20260823 --output data/generated/router_v2_pilot_5000.jsonl --manifest runs/router_v2_pilot_5000_manifest.json
 python -m tools.validate_router_v2_pilot --input data/generated/router_v2_pilot_5000.jsonl --expected-count 5000 --min-per-target 200 --report runs/router_v2_pilot_5000_validation.json
 python -m tools.audit_router_v2_holdouts --input data/generated/router_v2_pilot_5000.jsonl --report runs/router_v2_pilot_5000_holdout_audit.json
-python -m tools.train_encoder_v2 --input data/generated/router_v2_pilot_5000.jsonl --output artifacts/router_v2_pilot_1k.pt --train-count 1000 --epochs 15 --feature-dim 2048 --hidden-dim 128 --learning-rate 0.002 --seed 20260823
-python -m tools.train_encoder_v2 --input data/generated/router_v2_pilot_5000.jsonl --output artifacts/router_v2_pilot_2_5k.pt --train-count 2500 --epochs 15 --feature-dim 2048 --hidden-dim 128 --learning-rate 0.002 --seed 20260823
-python -m tools.train_encoder_v2 --input data/generated/router_v2_pilot_5000.jsonl --output artifacts/router_v2_pilot_full.pt --train-count 3400 --epochs 15 --feature-dim 2048 --hidden-dim 128 --learning-rate 0.002 --seed 20260823
-python -m tools.evaluate_router_v2 --artifact artifacts/router_v2_pilot_full.pt --input data/generated/router_v2_pilot_5000.jsonl --output runs/router_v2_pilot_full_evaluation.json
+python -m tools.generate_router_v2_question_generalization --frozen-input data/generated/router_v2_pilot_5000.jsonl --output data/generated/router_v2_question_generalization_5000.jsonl --manifest runs/router_v2_question_generalization_5000_manifest.json --training-output data/generated/router_v2_question_generalization_training_8400.jsonl --training-manifest runs/router_v2_question_generalization_training_8400_manifest.json
+python -m tools.validate_router_v2_question_generalization --frozen-input data/generated/router_v2_pilot_5000.jsonl --derived-input data/generated/router_v2_question_generalization_5000.jsonl --training-input data/generated/router_v2_question_generalization_training_8400.jsonl --report runs/router_v2_question_generalization_5000_validation.json
+python -m tools.train_encoder_v2 --input data/generated/router_v2_question_generalization_training_8400.jsonl --output artifacts/router_v2_question_generalization_1k.pt --train-count 1000 --epochs 30 --feature-dim 2048 --hidden-dim 128 --learning-rate 0.002 --seed 20260823
+python -m tools.train_encoder_v2 --input data/generated/router_v2_question_generalization_training_8400.jsonl --output artifacts/router_v2_question_generalization_2_5k.pt --train-count 2500 --epochs 30 --feature-dim 2048 --hidden-dim 128 --learning-rate 0.002 --seed 20260823
+python -m tools.train_encoder_v2 --input data/generated/router_v2_question_generalization_training_8400.jsonl --output artifacts/router_v2_question_generalization_full.pt --train-count 6800 --epochs 30 --feature-dim 2048 --hidden-dim 128 --learning-rate 0.002 --seed 20260823
+python -m tools.evaluate_router_v2 --artifact artifacts/router_v2_question_generalization_full.pt --input data/generated/router_v2_pilot_5000.jsonl --output runs/router_v2_question_generalization_full_frozen_evaluation.json
+python -m tools.evaluate_router_v2 --artifact artifacts/router_v2_question_generalization_full.pt --input data/generated/router_v2_question_generalization_5000.jsonl --output runs/router_v2_question_generalization_full_derived_evaluation.json
+python -m tools.check_router_v2_question_gate --baseline-frozen runs/router_v2_pilot_full_evaluation.json --candidate-frozen runs/router_v2_question_generalization_full_frozen_evaluation.json --candidate-generalized runs/router_v2_question_generalization_full_derived_evaluation.json --report runs/router_v2_question_generalization_full_gate.json
+```
+
+The passing gate authorizes the 30k scale data pilot:
+
+```text
+python -m tools.generate_router_v2_scale --count 30000 --seed 20260923 --output data/generated/router_v2_scale_30000.jsonl --manifest runs/router_v2_scale_30000_manifest.json
+python -m tools.validate_router_v2_pilot --input data/generated/router_v2_scale_30000.jsonl --expected-count 30000 --min-per-target 1000 --report runs/router_v2_scale_30000_validation.json
+python -m tools.audit_router_v2_holdouts --input data/generated/router_v2_scale_30000.jsonl --report runs/router_v2_scale_30000_holdout_audit.json
+python -m tools.generate_router_v2_question_generalization --frozen-input data/generated/router_v2_scale_30000.jsonl --output data/generated/router_v2_scale_question_generalization_30000.jsonl --manifest runs/router_v2_scale_question_generalization_30000_manifest.json --training-output data/generated/router_v2_scale_question_generalization_training_50400.jsonl --training-manifest runs/router_v2_scale_question_generalization_training_50400_manifest.json --expected-count 30000
+python -m tools.validate_router_v2_question_generalization --frozen-input data/generated/router_v2_scale_30000.jsonl --derived-input data/generated/router_v2_scale_question_generalization_30000.jsonl --training-input data/generated/router_v2_scale_question_generalization_training_50400.jsonl --expected-count 30000 --report runs/router_v2_scale_question_generalization_30000_validation.json
 ```
 
 If the local NInfer endpoint is available, proposals remain separate from

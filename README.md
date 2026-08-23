@@ -35,8 +35,14 @@ V1 code and artifacts remain supported and unchanged.
 The first completed V2 pilot is a 5,000-state deterministic matrix-oracle
 slice with frozen unseen-ID, renamed-ID, schema, modality, family, source,
 question-template and alternate-registry cohorts. The current encoder feature
-version is `registry-features.v2.1`; NInfer proposals are generated and
-validated separately from labels.
+version is `registry-features.v2.2`; NInfer proposals are generated and
+validated separately from labels. The original 5,000-row JSONL is frozen;
+question-generalization training uses a derived interleaved view containing
+the original and indirect/paraphrased question surfaces.
+
+The post-gate scale pilot is 30,000 deterministic states with 20,400 training
+rows and 300 indirect-question holdout rows. It is a data-scale pilot, not a
+claim that the resulting encoder is production-ready.
 
 ## Repository layout
 
