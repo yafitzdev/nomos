@@ -128,12 +128,15 @@ complete multi-step tasks, so it is not promoted over the 50k checkpoint. The
 next gate is actual external-agent execution; more synthetic rows are not yet
 justified.
 
-The first external Fitz-Sage V2 smoke produced two schema-valid traces through
-the adapter, but zero accepted trajectories. V2 repeated an incomplete
-tool-call argument payload and exhausted its step limit without selecting
-evidence. Treat this as an agent-output/parsing blocker. Fix the live external
-decision loop and connect its legal candidates to `runner-request.v2` before
-using any new trajectories or expanding the corpus.
+The first external Fitz-Sage V2 smoke produced schema-valid traces but zero
+accepted trajectories because the local backend repeated incomplete or
+non-visible tool calls. The V2-specific `tools.nomos_openai_proxy` bridge now
+places the 100k Nomos checkpoint in the live candidate loop, enforces the
+external runner's legal candidates, repairs one-step output failures and keeps
+source discovery available when a named source is unresolved. The aligned
+payments fixture now completes a 10-decision trajectory and passes deterministic
+acceptance. This is an integration proof, not a production benchmark; the next
+gate is a stratified accepted-trajectory sample before collecting more data.
 
 ## Current commands
 

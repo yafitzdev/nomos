@@ -103,8 +103,9 @@ On the frozen external suite, the 100k checkpoint reaches:
 | **Mean** | **68.5%** | **88.0%** |
 
 This is the current accepted line. The next step is not another blind data
-increase: repair the external-agent decision-output path and place Nomos in
-that live candidate-selection loop before collecting more training data.
+increase: measure the repaired live external-agent loop on a stratified sample
+and extract only deterministically accepted decision states before collecting
+more training data.
 
 ## Execution-loop gate
 
@@ -122,13 +123,16 @@ versus 53.9% for 50k), but it lost more often after the first successful tool
 result. The 100k model is therefore still a research candidate, not yet a
 promoted runtime model.
 
-The next real-agent smoke used the external Fitz-Sage V2 runner boundary on
-two fixture scenarios. Both `trajectory.v1` outputs were schema-valid, but
-both were rejected: V2 repeated an incomplete tool-call argument payload,
-reached its step limit, and selected no evidence. This is an agent-output
-parsing blocker, not evidence for generating more router rows. Before another
-training run, the external agent must emit complete decision requests and the
-Nomos process must be inserted into that live candidate-selection loop.
+The first real-agent smoke used the external Fitz-Sage V2 runner boundary on
+two fixture scenarios. Both were rejected because V2 repeated incomplete or
+non-visible tool calls and reached its step limit. The V2-specific
+`tools.nomos_openai_proxy` bridge now translates the observable request, ranks
+only supplied legal candidates, preserves source-modality constraints, and
+repairs bounded output-format failures. On the aligned payments fixture, the
+repaired path produced 10 decisions, selected the expected evidence and passed
+deterministic acceptance. This is an integration proof, not a broad quality
+score; the next gate is a stratified external-runner sample and clean
+accepted-state extraction.
 
 ## Commands
 

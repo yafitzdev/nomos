@@ -80,17 +80,35 @@ Fitz-Sage V2 validation.
 
 ## Fitz-Sage V2 smoke result
 
-The external `runner.v1` adapter was also exercised against two generated
-fixture scenarios using a local Fitz-Sage V2 subprocess. The adapter returned
-two schema-valid `trajectory.v1` traces in the expected order, confirming that
-the process boundary and trace validation work. Neither trajectory was
-accepted: V2 repeated an incomplete `<tool_call>` argument payload, produced
-no legal executed tool according to its own diagnostics, and reached its step
-limit with no selected evidence.
+The first direct smoke exposed an agent-output problem: the local Qwen backend
+sometimes emitted incomplete or non-visible tool calls and reached the step
+limit without selecting evidence. Fitz-Tool now provides
+`tools.nomos_openai_proxy`, a V2-specific adapter-layer process that:
 
-This is an agent-output/parsing blocker, not a router-quality result. The
-smoke did not yet place Nomos in V2's live decision loop, so those traces must
-not be used as positive training data. The next integration gate is to make
-the external agent emit complete, parseable decision requests and then route
-the supplied legal candidates through `runner-request.v2` before measuring
-real tool execution.
+- translates each observable OpenAI request into `runner-request.v2`;
+- ranks only the candidate functions supplied by the external runner;
+- preserves modality constraints while allowing unresolved source discovery;
+- raises the tool-call output budget and retries once when the response is
+  incomplete; and
+- rejects or repairs malformed/non-legal model output into the selected legal
+  function shape without importing Fitz-Sage code.
+
+On the aligned payments fixture, the repaired path produced one valid
+`trajectory.v1` trace with 10 decisions. The external V2 run ended in
+`selected`, retrieved and inspected the expected AUTH-409 evidence, and passed
+the deterministic acceptance check. The proxy routed three multi-candidate
+decisions and repaired one backend response. This proves that Nomos is in the
+live candidate-selection loop; it is not yet a production-quality benchmark.
+
+Run the local bridge with the 100k checkpoint like this:
+
+```text
+python -m tools.nomos_openai_proxy --artifact artifacts/nomos_generic_portability_100000.pt --target-url http://127.0.0.1:19003/v1 --listen-port 19004 --source-modality text --min-max-tokens 512 --retry-max-tokens 1024 --trace-output runs/nomos_proxy_trace.jsonl
+python -m tools.run_runner_audit --scenarios runs/v2_runner_aligned_scenario.jsonl --audit-manifest runs/v2_runner_aligned_audit.json --output runs/v2_runner_nomos_aligned_trajectories.jsonl --runner-command python -m tools.run_v2_runner --v2-root ../fitz-sage-v2 --source-root tests/fixtures/pilot_corpus --source-card tests/fixtures/payments_migration_source_card.json --base-url http://127.0.0.1:19004/v1 --model qwen3.8-27b --backend llama-cpp --max-steps 14 --governance off --scenario-timeout 480 --no-prewarm
+```
+
+The proxy is an integration adapter, not part of the generic router core. Its
+repair path is a legal-candidate safety boundary, not a substitute for tool
+execution, evidence validation or deterministic terminal acceptance. The next
+gate is a stratified external-runner sample large enough to measure accepted
+trajectories and extract only verified decision states for training.

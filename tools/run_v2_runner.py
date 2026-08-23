@@ -262,6 +262,7 @@ def _trajectory(
                     "error": "V2 produced no legal tool call for the visible decision state",
                     "legal_tools": legal_tools,
                     "model_output": diagnostic.get("text"),
+                    "diagnostic_error": diagnostic.get("error"),
                 }
             )
             continue

@@ -49,6 +49,19 @@ Use `--governance shadow` or the production governance mode only for the
 state-aware acceptance gate. The bounded no-governance output is evidence that
 the external process contract works, not a training-label source.
 
+To place the generic Nomos router in the live Fitz-Sage V2 OpenAI-compatible
+loop, run the V2-specific proxy adapter in a separate process. It never imports
+Fitz-Sage modules; it sees only the question, transcript, visible tool schemas
+and current legal candidate set:
+
+```text
+python -m tools.nomos_openai_proxy --artifact artifacts/nomos_generic_portability_100000.pt --target-url http://127.0.0.1:19003/v1 --listen-port 19004 --source-modality text --min-max-tokens 512 --retry-max-tokens 1024 --trace-output runs/nomos_proxy_trace.jsonl
+```
+
+Point `tools.run_v2_runner` at `http://127.0.0.1:19004/v1`. The proxy's
+format-repair path is a legal-candidate safety boundary for local smoke tests;
+it does not create evidence, execute tools or turn a trajectory into a label.
+
 When the external teacher is unavailable, the development-only matrix-template
 bootstrap keeps scale and encoder plumbing testable without masquerading as
 teacher data. The current validated scale command is:
