@@ -349,6 +349,41 @@ PROMOTION_WORKFLOWS = (
 )
 
 
+CONDITION_POLICIES = {
+    # One-shot controls. Validation is used only as the scoring/execution gate;
+    # the agent never sees repair feedback and cannot recover from a bad choice.
+    "full_raw": {
+        "use_selector": False,
+        "top_k": None,
+        "one_shot": True,
+        "repair_feedback": False,
+        "candidate_recovery": False,
+    },
+    "nomos_raw": {
+        "use_selector": True,
+        "top_k": 3,
+        "one_shot": True,
+        "repair_feedback": False,
+        "candidate_recovery": False,
+    },
+    # Historical assisted controls are retained so prior reports reproduce.
+    "full": {
+        "use_selector": False,
+        "top_k": None,
+        "one_shot": False,
+        "repair_feedback": True,
+        "candidate_recovery": True,
+    },
+    "nomos": {
+        "use_selector": True,
+        "top_k": 3,
+        "one_shot": False,
+        "repair_feedback": True,
+        "candidate_recovery": True,
+    },
+}
+
+
 class ChatBackend(Protocol):
     def complete(
         self, messages: Sequence[Mapping[str, str]], *, max_new_tokens: int = 128
@@ -564,6 +599,14 @@ def _execute(capability: str, expected: str, arguments: Mapping[str, Any]) -> di
     return {"ok": True, "value": value}
 
 
+def _canonical_capability(tool_id: str, suite: str, registry: ToolRegistry) -> str:
+    if suite == "final":
+        return final_canonical_capability(tool_id)
+    if suite == "promotion":
+        return promotion_canonical_capability(tool_id) or "irrelevant"
+    return registry.require(tool_id).capabilities[0]
+
+
 def _run_session(
     backend: ChatBackend,
     selector: DenseSelector | None,
@@ -574,6 +617,8 @@ def _run_session(
     max_attempts: int,
     suite: str = "development",
 ) -> dict[str, Any]:
+    policy = CONDITION_POLICIES[condition]
+    attempt_limit = 1 if policy["one_shot"] else max_attempts
     completed: list[str] = []
     events = []
     totals = Counter()
@@ -581,7 +626,7 @@ def _run_session(
         rejected: list[str] = []
         feedback = ""
         stage_passed = False
-        for attempt in range(max_attempts):
+        for attempt in range(attempt_limit):
             legal_ids = [tool.tool_id for tool in registry.tools if tool.tool_id not in rejected]
             request = _request(
                 workflow,
@@ -592,7 +637,12 @@ def _run_session(
                 completed=completed,
             )
             ranked = selector.rank(request, registry, legal_ids) if selector else legal_ids
-            visible = ranked[:3] if condition == "nomos" else legal_ids
+            top_k = policy["top_k"]
+            visible = ranked[:top_k] if isinstance(top_k, int) else legal_ids
+            oracle_hit = any(
+                _canonical_capability(tool_id, suite, registry) == stage
+                for tool_id in visible
+            )
             prompt = _prompt(request, registry, visible, feedback)
             result = backend.complete(
                 [
@@ -607,28 +657,56 @@ def _run_session(
             totals["available_tools"] += len(legal_ids)
             call = _parse_call(str(result["text"]))
             if call is None:
-                feedback = "malformed JSON tool call"
-                events.append({"stage": stage, "attempt": attempt + 1, "valid": False, "error": feedback})
+                error = "malformed JSON tool call"
+                feedback = error if policy["repair_feedback"] else ""
+                events.append(
+                    {
+                        "stage": stage,
+                        "attempt": attempt + 1,
+                        "valid": False,
+                        "selection_correct": False,
+                        "oracle_visible_hit": oracle_hit,
+                        "error": error,
+                        "visible_tool_ids": visible,
+                    }
+                )
                 continue
             validation_state = {**request, "legal_candidate_ids": visible}
             validation = validate_tool_call(registry, validation_state, call)
+            registry_tool_ids = {tool.tool_id for tool in registry.tools}
+            selected_capability = (
+                _canonical_capability(validation.tool_id, suite, registry)
+                if validation.tool_id in registry_tool_ids
+                else None
+            )
+            selection_correct = selected_capability == stage
             if not validation.valid:
-                repair = validation_repair_guidance(registry, validation)
-                feedback = _repair_feedback(
-                    repair, ", ".join(validation.failure_reasons)
+                repair = (
+                    validation_repair_guidance(registry, validation)
+                    if policy["repair_feedback"]
+                    else None
                 )
+                reasons = ", ".join(validation.failure_reasons)
+                feedback = _repair_feedback(repair, reasons) if policy["repair_feedback"] else ""
                 # A malformed call is a request to repair the arguments, not a
                 # signal that the selected tool itself is irrelevant.  Keep a
                 # repairable tool visible so the agent can retry it.  Only a
                 # permanent tool-level rejection advances the candidate page.
-                if not validation.repairable and validation.tool_id in legal_ids:
+                if (
+                    policy["candidate_recovery"]
+                    and not validation.repairable
+                    and validation.tool_id in legal_ids
+                ):
                     rejected.append(validation.tool_id)
                 events.append(
                     {
                         "stage": stage,
                         "attempt": attempt + 1,
                         "tool_id": validation.tool_id,
+                        "capability": selected_capability,
                         "valid": False,
+                        "selection_correct": selection_correct,
+                        "oracle_visible_hit": oracle_hit,
                         "error": feedback,
                         "repairable": validation.repairable,
                         "repair": repair,
@@ -637,12 +715,7 @@ def _run_session(
                 )
                 continue
             tool = registry.require(validation.tool_id)
-            if suite == "final":
-                capability = final_canonical_capability(tool.tool_id)
-            elif suite == "promotion":
-                capability = promotion_canonical_capability(tool.tool_id) or "irrelevant"
-            else:
-                capability = tool.capabilities[0]
+            capability = _canonical_capability(tool.tool_id, suite, registry)
             execution = _execute(capability, stage, call.get("arguments") or {})
             events.append(
                 {
@@ -651,6 +724,8 @@ def _run_session(
                     "tool_id": tool.tool_id,
                     "capability": capability,
                     "valid": True,
+                    "selection_correct": selection_correct,
+                    "oracle_visible_hit": oracle_hit,
                     "execution": execution,
                     "visible_tool_count": len(visible),
                     "visible_tool_ids": visible,
@@ -660,9 +735,9 @@ def _run_session(
                 completed.append(stage)
                 stage_passed = True
                 break
-            if tool.tool_id not in rejected:
+            if policy["candidate_recovery"] and tool.tool_id not in rejected:
                 rejected.append(tool.tool_id)
-            feedback = str(execution["error"])
+            feedback = str(execution["error"]) if policy["repair_feedback"] else ""
         if not stage_passed:
             break
     return {
@@ -709,7 +784,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optionally restrict execution to named workflows.",
     )
     parser.add_argument("--max-attempts", type=int, default=2)
-    parser.add_argument("--condition", choices=("full", "nomos", "both"), default="both")
+    parser.add_argument(
+        "--condition",
+        choices=("full_raw", "nomos_raw", "full", "nomos", "both", "ablation"),
+        default="both",
+        help=(
+            "raw conditions are one-shot with no repair or recovery; ablation runs "
+            "full_raw, nomos_raw, and the complete Nomos coprocessor"
+        ),
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--trace-output", type=Path, required=True)
     return parser
@@ -746,7 +829,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         registry_styles = EXTERNAL_REGISTRY_STYLES
         registry_builder = build_external_registry
         suite_version = "development.v1"
-    conditions = ("full", "nomos") if args.condition == "both" else (args.condition,)
+    if args.condition == "both":
+        conditions = ("full", "nomos")
+    elif args.condition == "ablation":
+        conditions = ("full_raw", "nomos_raw", "nomos")
+    else:
+        conditions = (args.condition,)
     workflows = (
         tuple(
             workflow
@@ -766,7 +854,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             traces.append(
                 _run_session(
                     backend,
-                    selector if condition == "nomos" else None,
+                    selector if CONDITION_POLICIES[condition]["use_selector"] else None,
                     workflow,
                     registry,
                     condition=condition,
@@ -777,6 +865,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     summaries = {}
     for condition in conditions:
         rows = [row for row in traces if row["condition"] == condition]
+        events = [event for row in rows for event in row["events"]]
+        executions = [event for event in events if "execution" in event]
         summaries[condition] = {
             "sessions": len(rows),
             "success_rate": sum(row["success"] for row in rows) / len(rows),
@@ -786,6 +876,36 @@ def main(argv: Sequence[str] | None = None) -> int:
             / len(rows),
             "prompt_tokens": sum(row["prompt_tokens"] for row in rows),
             "completion_tokens": sum(row["completion_tokens"] for row in rows),
+            "tool_call_attempts": len(events),
+            "prompt_tokens_per_attempt": (
+                sum(row["prompt_tokens"] for row in rows) / len(events)
+                if events
+                else 0.0
+            ),
+            "successful_execution_rate": (
+                sum(bool(event["execution"]["ok"]) for event in executions) / len(events)
+                if events
+                else 0.0
+            ),
+            "tool_selection_accuracy": (
+                sum(bool(event["selection_correct"]) for event in events) / len(events)
+                if events
+                else 0.0
+            ),
+            "schema_valid_call_rate": (
+                sum(bool(event["valid"]) for event in events) / len(events)
+                if events
+                else 0.0
+            ),
+            "wrong_tool_executions": sum(
+                not bool(event["execution"]["ok"]) for event in executions
+            ),
+            "invalid_calls": sum(not bool(event["valid"]) for event in events),
+            "visible_oracle_hit_rate": (
+                sum(bool(event["oracle_visible_hit"]) for event in events) / len(events)
+                if events
+                else 0.0
+            ),
             "tool_description_reduction": 1.0
             - sum(row["visible_tools"] for row in rows)
             / sum(row["available_tools"] for row in rows),

@@ -25,9 +25,11 @@ for tool execution, arguments, provenance, governance and final selection.
 
 Nomos now passes the production promotion gates. On a sealed suite with 34
 tools per registry, the correct tool is top-three in 152/152 unseen states. A
-local Qwen3-0.6B agent improves from 2/8 completed tasks with the full registry
-to 8/8 with Nomos, while prompt tokens fall by 86.6%. A stronger agent remains
-8/8 while using 86.0% fewer prompt tokens.
+local Qwen3-0.6B agent improves from 0/8 completed tasks with one-shot access
+to the raw full registry to 6/8 with one-shot raw Nomos top-three proposals.
+The complete coprocessor reaches 7/8 in the same fresh run. A stronger agent
+improves from 7/8 to 8/8 in raw one-shot mode while using 85.7% fewer prompt
+tokens per call attempt.
 
 The promoted deployment is a 127.6 MiB FP32 ONNX encoder plus deterministic
 validation, confidence, repair, and no-repeat recovery code. See

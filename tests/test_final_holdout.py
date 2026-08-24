@@ -95,3 +95,30 @@ def test_repairable_schema_error_keeps_correct_tool_available() -> None:
     assert result["success"] is True
     assert result["events"][0]["repairable"] is True
     assert result["events"][0]["tool_id"] == result["events"][1]["tool_id"]
+
+
+def test_raw_condition_is_one_shot_and_does_not_expose_repair_guidance() -> None:
+    from fitz_tool.external_registry_fixtures import build_external_registry
+
+    registry = build_external_registry("spectrum")
+    workflow = next(item for item in WORKFLOWS if item["name"] == "source_discovery")
+    backend = ScriptedBackend(
+        [
+            {"tool_id": "quartz_catalog", "arguments": {}},
+            {"tool_id": "quartz_catalog", "arguments": {"query": "sources"}},
+        ]
+    )
+
+    result = _run_session(
+        backend,
+        None,
+        workflow,
+        registry,
+        condition="full_raw",
+        max_attempts=99,
+    )
+
+    assert result["success"] is False
+    assert len(result["events"]) == 1
+    assert result["events"][0]["repair"] is None
+    assert result["events"][0]["selection_correct"] is True

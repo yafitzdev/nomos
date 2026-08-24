@@ -15,9 +15,14 @@ current objective, observable state, and a registry of legal tools. Nomos:
 5. returns schema-derived repair guidance without accepting or executing an
    invalid call.
 
-On the sealed 34-tool promotion suite, a local Qwen3-0.6B agent completed 2/8
-tasks with the full registry and 8/8 with Nomos. A stronger DeepSeek agent
-completed 8/8 in both conditions, while Nomos cut its prompt tokens by 86%.
+The original assisted evaluation found that a local Qwen3-0.6B agent completed
+2/8 tasks with the full registry and 8/8 with the complete Nomos runtime. That
+comparison measured the whole system, not the encoder alone. A subsequent
+one-shot ablation removes repair feedback, retries, and replacement candidates:
+the weak agent completes 0/8 with all 34 tools, 4/8 with the old encoder's raw
+top three, and 6/8 with the promoted encoder's raw top three. This isolates a
+real encoder contribution without attributing the complete runtime's safety
+net to the learned weights.
 
 ## Deploy this
 
@@ -105,6 +110,45 @@ the old mixed encoder and 73.3% for the previous curriculum checkpoint to
 
 The old generic holdout moves from 95.6% for the old mixed checkpoint to 94.2%
 for the promoted model, a 1.4-point regression and inside the two-point gate.
+
+## Raw end-to-end ablation
+
+"Raw" here means one attempt per workflow stage. The agent sees either the
+entire legal registry or the encoder's first three candidates. Deterministic
+validation is used only as the scoring and execution gate. It does not return
+repair instructions, retry a malformed call, exclude a wrong tool, or request
+another candidate page.
+
+| Agent and condition | Tasks | Mean stage completion | Tool selection | Invalid calls | Wrong executions |
+|---|---:|---:|---:|---:|---:|
+| Qwen3-0.6B, all 34 tools, raw | 0/8 | 4.3% | 40.0% | 3 | 5 |
+| Qwen3-0.6B, old encoder top-3, raw | 4/8 | 63.2% | 93.3% | 2 | 2 |
+| Qwen3-0.6B, promoted encoder top-3, raw | 6/8 | 77.5% | 97.0% | 1 | 1 |
+| Qwen3-0.6B, promoted complete coprocessor | 7/8 | 87.5% | 97.4% | 3 | 1 |
+| DeepSeek-v4-flash, all 34 tools, raw | 7/8 | 87.5% | 96.9% | 0 | 1 |
+| DeepSeek-v4-flash, old encoder top-3, raw | 8/8 | 100.0% | 100.0% | 0 | 0 |
+| DeepSeek-v4-flash, promoted encoder top-3, raw | 8/8 | 100.0% | 100.0% | 0 | 0 |
+| DeepSeek-v4-flash, promoted complete coprocessor | 8/8 | 100.0% | 100.0% | 0 | 0 |
+
+The correct tool was present somewhere in every raw top-three set for both
+encoders. The weak agent nevertheless made fewer wrong selections with the
+promoted ordering. The strong agent saturates this eight-task suite with either
+encoder, so it provides evidence that raw top-three filtering works but cannot
+resolve the old/new difference. The weak-agent result is directional rather
+than definitive because eight workflows are a small sample.
+
+For the strong agent, full-registry raw prompts averaged 2,377 tokens per tool
+call attempt; promoted raw top-three prompts averaged 339, an 85.7% reduction.
+The complete coprocessor added no benefit in this strong-agent run because all
+raw top-three calls were already valid and correct. In the fresh weak-agent
+run, it recovered one additional task over raw top-three, not all six gains.
+
+Local run outputs (intentionally ignored by git with the other generated runs):
+
+- `runs/nomos_contrast_replay_raw_ablation_weak_8_v1.json`
+- `runs/nomos_mixed_raw_ablation_weak_8_v1.json`
+- `runs/nomos_contrast_replay_raw_ablation_strong_8_v1.json`
+- `runs/nomos_mixed_raw_ablation_strong_8_v1.json`
 
 ## CPU deployment
 
