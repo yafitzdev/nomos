@@ -23,6 +23,7 @@ weights, and run JSON remain ignored locally; source workflows are committed.
 | Targeted scaling 25k | 99.56% frozen R@3; 81.7% ToolRet | Reject: non-monotonic scaling and dominated shortlist |
 | Targeted 25k + 10,896 replay | 100% frozen/final/promotion R@3; 76.7% ToolRet; Qwen raw 17/32 | Reject: retrieval gains did not transfer to agent |
 | Targeted staged 12.5k + 12.5k | 100% final/promotion R@3; 81.7% ToolRet; Qwen raw 17/32 | Reject: ordering/agent-choice regression |
+| Balanced 5,100 hard rows + exact 35,081 full replay | 10% MNRL blend: 94.4% generic R@3, 80.0% ToolRet R@3, Qwen raw 20/32 | Reject: corrected replay still regressed raw agent choice |
 
 ## Deployment experiments
 
@@ -40,6 +41,9 @@ generation. The 2026-08-24 targeted experiment accepted and validated exactly
 17/32 for both replay and staged finalists. Synthetic margins improved while
 real agent choices worsened. See [`SCALING_EXPERIMENT_V1.md`](SCALING_EXPERIMENT_V1.md).
 Future work should target order-aware weak-agent transfer rather than row count.
+The corrected full-replay follow-up reached the same conclusion without the
+original replay confound; see
+[`SCALING_SALVAGE_EXPERIMENT_V1.md`](SCALING_SALVAGE_EXPERIMENT_V1.md).
 
 ## Source references
 

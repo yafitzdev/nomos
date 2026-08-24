@@ -13,6 +13,19 @@ Planned slices:
 7. Train and evaluate the tool-routing encoder.
 
 The runner boundary is documented in `docs/EXTERNAL_RUNNER_CONTRACT.md`.
+
+For scaling follow-ups, score every generated registry against the currently
+promoted checkpoint before training. The balanced salvage workflow retains
+actual ranking mistakes and low-margin examples per canonical capability:
+
+```text
+python -m tools.audit_scaling_salvage --base-model artifacts/nomos_bge_contrast_replay_ablation --input data/generated/nomos_scaling_targeted_v1_25000.jsonl --scores-output runs/nomos_scaling_targeted_v1_hardness.jsonl --salvage-output data/generated/nomos_scaling_targeted_v1_balanced_hard.jsonl --manifest-output runs/nomos_scaling_targeted_v1_balanced_hard.manifest.json --max-per-capability 300 --device cuda
+```
+
+This subset is a correction curriculum, not a replacement for the old clean
+lineage. Full replay inputs and the downstream raw-agent result are documented
+in `docs/SCALING_SALVAGE_EXPERIMENT_V1.md`.
+
 The first local commands are:
 
 ```text
