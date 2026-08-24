@@ -18,6 +18,11 @@ weights, and run JSON remain ignored locally; source workflows are committed.
 | Tool-Embed-0.6B reference | 75.0% ToolRet R@3; ~1.5 GB weights | Reject for compact CPU target |
 | Candidate multiview late interaction | Development R@3 rose to 100%; ToolRet to 73.3% | Retain runtime architecture |
 | 3.4k opaque contrast + transition replay | 99.78% synthetic R@3; 80.0% ToolRet; 100% promotion R@3 | Promote |
+| Targeted scaling 5k | 99.78% frozen R@3; 81.7% ToolRet; Qwen raw 19/32 | Reject: raw agent regressed from 23/32 |
+| Targeted scaling 10k | 99.78% frozen R@3; 78.3% ToolRet | Reject: dominated before agent execution |
+| Targeted scaling 25k | 99.56% frozen R@3; 81.7% ToolRet | Reject: non-monotonic scaling and dominated shortlist |
+| Targeted 25k + 10,896 replay | 100% frozen/final/promotion R@3; 76.7% ToolRet; Qwen raw 17/32 | Reject: retrieval gains did not transfer to agent |
+| Targeted staged 12.5k + 12.5k | 100% final/promotion R@3; 81.7% ToolRet; Qwen raw 17/32 | Reject: ordering/agent-choice regression |
 
 ## Deployment experiments
 
@@ -29,11 +34,12 @@ weights, and run JSON remain ignored locally; source workflows are committed.
 
 ## Learning-curve conclusion
 
-The observed curve does not support 60k or 100k generation. The broad 4k slice
-helped, the ordered 30k expansion regressed, and 1k-to-10k Tool-REX training was
-flat. A smaller dimension-focused 3.4k contrast cohort improved every relevant
-new benchmark while keeping old-holdout regression inside the gate. Future
-generation should target measured failure cohorts, not row count.
+The observed curve does not support a second 25k cohort, 60k, or 100k
+generation. The 2026-08-24 targeted experiment accepted and validated exactly
+25,000 new rows, but raw Qwen completion fell from 23/32 to 19/32 at 5k and
+17/32 for both replay and staged finalists. Synthetic margins improved while
+real agent choices worsened. See [`SCALING_EXPERIMENT_V1.md`](SCALING_EXPERIMENT_V1.md).
+Future work should target order-aware weak-agent transfer rather than row count.
 
 ## Source references
 

@@ -30,6 +30,21 @@ class ScriptedBackend:
         }
 
 
+class CapturingBackend:
+    def __init__(self) -> None:
+        self.messages: list[object] = []
+
+    def complete(self, messages: object, *, max_new_tokens: int = 128) -> dict[str, object]:
+        del max_new_tokens
+        self.messages.append(messages)
+        return {"text": "not json", "prompt_tokens": 10, "completion_tokens": 2}
+
+
+class OrderedSelector:
+    def rank(self, _request: object, _registry: object, legal_ids: list[str]) -> list[str]:
+        return list(legal_ids)
+
+
 def test_cross_product_session_pairing_covers_every_combination() -> None:
     workflows = ({"name": "one"}, {"name": "two"})
     styles = ("alpha", "beta", "gamma")
@@ -143,3 +158,30 @@ def test_raw_condition_is_one_shot_and_does_not_expose_repair_guidance() -> None
     assert len(result["events"]) == 1
     assert result["events"][0]["repair"] is None
     assert result["events"][0]["selection_correct"] is True
+
+
+def test_nomos_top_k_override_controls_visible_candidates() -> None:
+    from fitz_tool.external_registry_fixtures import build_external_registry
+
+    registry = build_external_registry("spectrum")
+    backend = CapturingBackend()
+    workflow = {
+        "name": "top_k_probe",
+        "question": "Find the available sources.",
+        "stages": ("list_sources",),
+    }
+
+    result = _run_session(
+        backend,
+        OrderedSelector(),
+        workflow,
+        registry,
+        condition="nomos_raw",
+        max_attempts=2,
+        nomos_top_k=1,
+    )
+
+    user_prompt = backend.messages[0][1]["content"]
+    visible = json.loads(user_prompt.split("Visible tools: ", 1)[1])
+    assert result["visible_tools"] == 1
+    assert len(visible) == 1

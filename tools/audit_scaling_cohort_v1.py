@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import random
 import re
@@ -26,8 +27,11 @@ RECOVERY_CUE = re.compile(
 META_LANGUAGE = re.compile(r"\b(assignment id|benchmark|ground truth|hidden label|training (?:row|data)|routing matrix)\b", re.I)
 
 
-def _load(path: Path) -> list[dict[str, Any]]:
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+def _iter_rows(path: Path):
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if line.strip():
+                yield json.loads(line)
 
 
 def _sample(rows: list[dict[str, Any]], size: int, seed: int) -> list[dict[str, Any]]:
@@ -115,10 +119,36 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    rows = _load(args.input)
     if args.sample_size < 100:
         raise SystemExit("quality audit sample-size must be at least 100")
-    sample = _sample(rows, args.sample_size, args.seed)
+    per_family_limit = max(5, (args.sample_size + 22) // 23 + 2)
+    candidates: dict[str, list[tuple[str, dict[str, Any]]]] = {}
+    normalized: set[str] = set()
+    semantic: set[str] = set()
+    input_rows = 0
+    for row in _iter_rows(args.input):
+        input_rows += 1
+        normalized.add(normalized_question(str(row["question"])))
+        semantic.add(
+            semantic_signature(
+                str(row["question"]), str(row.get("teacher_paraphrase") or "")
+            )
+        )
+        family = str(row["matrix_cell"]["scenario_family"])
+        score = hashlib.sha256(
+            f"{args.seed}:{row['decision_state_id']}".encode()
+        ).hexdigest()
+        values = candidates.setdefault(family, [])
+        values.append((score, row))
+        if len(values) > per_family_limit * 2:
+            values.sort(key=lambda value: value[0])
+            del values[per_family_limit:]
+    candidate_rows = [
+        row
+        for values in candidates.values()
+        for _score, row in sorted(values, key=lambda value: value[0])[:per_family_limit]
+    ]
+    sample = _sample(candidate_rows, min(args.sample_size, input_rows), args.seed)
     records = []
     reason_counts: Counter[str] = Counter()
     for row in sample:
@@ -134,8 +164,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "reasons": reasons,
             }
         )
-    normalized = [normalized_question(str(row["question"])) for row in rows]
-    semantic = [semantic_signature(str(row["question"]), str(row.get("teacher_paraphrase") or "")) for row in rows]
     systemic = {
         reason: count
         for reason, count in reason_counts.items()
@@ -143,7 +171,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     }
     report = {
         "input": str(args.input),
-        "input_rows": len(rows),
+        "input_rows": input_rows,
         "sample_size": len(sample),
         "seed": args.seed,
         "families_covered": sorted({str(row["matrix_cell"]["scenario_family"]) for row in sample}),
@@ -152,8 +180,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "failed_rows": sum(not value["passed"] for value in records),
         "reason_counts": dict(sorted(reason_counts.items())),
         "systemic_defects": systemic,
-        "unique_questions": len(set(normalized)),
-        "unique_semantic_signatures": len(set(semantic)),
+        "unique_questions": len(normalized),
+        "unique_semantic_signatures": len(semantic),
         "training_allowed": not systemic,
         "records": records,
     }

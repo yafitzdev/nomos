@@ -30,13 +30,17 @@ from tools.evaluate_real_agent_sessions import (
 )
 
 
-def _metrics(ranks: list[int]) -> dict[str, float | int]:
-    return {
+def _metrics(ranks: list[int], margins: list[float] | None = None) -> dict[str, float | int]:
+    metrics: dict[str, float | int] = {
         "states": len(ranks),
         "recall_at_1": sum(rank <= 1 for rank in ranks) / len(ranks),
+        "recall_at_2": sum(rank <= 2 for rank in ranks) / len(ranks),
         "recall_at_3": sum(rank <= 3 for rank in ranks) / len(ranks),
         "mrr": sum(1.0 / rank for rank in ranks) / len(ranks),
     }
+    if margins is not None:
+        metrics["mean_positive_margin"] = sum(margins) / len(margins)
+    return metrics
 
 
 def audit(
@@ -146,6 +150,16 @@ def audit(
                 key=lambda item: (-item[0], item[1].semantic_fingerprint),
             )
         ]
+        target_scores = [
+            score
+            for score, tool in scored
+            if (canonical(tool.tool_id) == stage if canonical else stage in tool.capabilities)
+        ]
+        negative_scores = [
+            score
+            for score, tool in scored
+            if not (canonical(tool.tool_id) == stage if canonical else stage in tool.capabilities)
+        ]
         target_rank = next(
             index
             for index, tool in enumerate(ranked, start=1)
@@ -162,6 +176,7 @@ def audit(
                 "workflow": workflow,
                 "target_capability": stage,
                 "target_rank": target_rank,
+                "positive_margin": max(target_scores) - max(negative_scores),
                 "predicted_capability": predicted_capability,
             }
         )
@@ -174,7 +189,10 @@ def audit(
         "suite_version": suite_version,
         "strategy": strategy,
         "candidate_strategy": candidate_strategy,
-        "metrics": _metrics([record["target_rank"] for record in records]),
+        "metrics": _metrics(
+            [record["target_rank"] for record in records],
+            [record["positive_margin"] for record in records],
+        ),
         "by_capability": {
             capability: _metrics(
                 [rank for rank, count in counts.items() for _ in range(count)]

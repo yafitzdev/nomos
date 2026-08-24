@@ -46,8 +46,10 @@ def _finish(counter: Counter[str]) -> dict[str, float | int]:
     return {
         "states": states,
         "recall_at_1": counter["recall_at_1"] / states if states else 0.0,
+        "recall_at_2": counter["recall_at_2"] / states if states else 0.0,
         "recall_at_3": counter["recall_at_3"] / states if states else 0.0,
         "mrr": counter["reciprocal_rank"] / states if states else 0.0,
+        "mean_positive_margin": counter["positive_margin"] / states if states else 0.0,
     }
 
 
@@ -83,6 +85,7 @@ def _score_rows(model: Any, rows: list[dict[str, Any]], batch_size: int) -> dict
     groups: dict[str, Counter[str]] = {}
     pool_groups: dict[str, Counter[str]] = {}
     capability_groups: dict[str, Counter[str]] = {}
+    scenario_groups: dict[str, Counter[str]] = {}
     disagreements = []
     for row, tools, query_embedding in zip(rows, row_tools, query_embeddings):
         scores = [float(np.dot(query_embedding, by_fingerprint[tool.semantic_fingerprint])) for tool in tools]
@@ -113,11 +116,19 @@ def _score_rows(model: Any, rows: list[dict[str, Any]], batch_size: int) -> dict
             capability_groups.setdefault(capability, Counter())
             for capability in expected_capabilities
         ]
-        for counter in (overall, group, pool_group, *capability_counters):
+        scenario = str((row.get("matrix_cell") or {}).get("scenario_family") or "unspecified")
+        scenario_group = scenario_groups.setdefault(scenario, Counter())
+        score_by_id = dict(zip((tool.tool_id for tool in tools), scores))
+        positive_scores = [score_by_id[tool_id] for tool_id in acceptable if tool_id in score_by_id]
+        negative_scores = [score for tool_id, score in score_by_id.items() if tool_id not in acceptable]
+        positive_margin = max(positive_scores) - max(negative_scores) if positive_scores and negative_scores else 0.0
+        for counter in (overall, group, pool_group, scenario_group, *capability_counters):
             counter["states"] += 1
             counter["recall_at_1"] += int(first_rank == 1)
+            counter["recall_at_2"] += int(first_rank is not None and first_rank <= 2)
             counter["recall_at_3"] += int(first_rank is not None and first_rank <= 3)
             counter["reciprocal_rank"] += 1.0 / first_rank if first_rank else 0.0
+            counter["positive_margin"] += positive_margin
         if first_rank != 1 and len(disagreements) < 50:
             disagreements.append(
                 {
@@ -140,6 +151,9 @@ def _score_rows(model: Any, rows: list[dict[str, Any]], batch_size: int) -> dict
         "metrics": _finish(overall),
         "by_task_kind": {key: _finish(value) for key, value in sorted(groups.items())},
         "by_pool_size": {key: _finish(value) for key, value in sorted(pool_groups.items())},
+        "by_scenario_family": {
+            key: _finish(value) for key, value in sorted(scenario_groups.items())
+        },
         "by_expected_capability": {
             key: _finish(value) for key, value in sorted(capability_groups.items())
         },

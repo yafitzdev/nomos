@@ -642,6 +642,7 @@ def _run_session(
     condition: str,
     max_attempts: int,
     suite: str = "development",
+    nomos_top_k: int | None = None,
 ) -> dict[str, Any]:
     policy = CONDITION_POLICIES[condition]
     attempt_limit = 1 if policy["one_shot"] else max_attempts
@@ -663,7 +664,11 @@ def _run_session(
                 completed=completed,
             )
             ranked = selector.rank(request, registry, legal_ids) if selector else legal_ids
-            top_k = policy["top_k"]
+            top_k = (
+                nomos_top_k
+                if selector is not None and nomos_top_k is not None
+                else policy["top_k"]
+            )
             visible = ranked[:top_k] if isinstance(top_k, int) else legal_ids
             oracle_hit = any(
                 _canonical_capability(tool_id, suite, registry) == stage
@@ -820,6 +825,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--max-attempts", type=int, default=2)
     parser.add_argument(
+        "--nomos-top-k",
+        type=int,
+        choices=(1, 2, 3),
+        default=3,
+        help="Number of ranked candidates visible in Nomos conditions.",
+    )
+    parser.add_argument(
         "--condition",
         choices=("full_raw", "nomos_raw", "full", "nomos", "both", "ablation"),
         default="both",
@@ -900,6 +912,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     condition=condition,
                     max_attempts=args.max_attempts,
                     suite=args.suite,
+                    nomos_top_k=args.nomos_top_k,
                 )
             )
     summaries = {}
@@ -957,6 +970,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "sessions_per_condition": args.sessions,
         "pairing": args.pairing,
         "max_attempts": args.max_attempts,
+        "nomos_top_k": args.nomos_top_k,
         "summaries": summaries,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

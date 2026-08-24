@@ -39,6 +39,13 @@ validation, confidence, repair, and no-repeat recovery code. See
 [`docs/EXPERIMENT_LEDGER.md`](docs/EXPERIMENT_LEDGER.md) for retained and
 rejected ablations.
 
+The subsequent targeted-scaling experiment generated and validated exactly
+25,000 new rows and trained 5k, 10k, 25k, replay, and staged variants. Several
+retrieval metrics and margins improved, but every shortlisted variant reduced
+raw Qwen3-0.6B completion (19/32 or 17/32 versus 23/32). No new checkpoint was
+promoted and no second cohort was generated. See
+[`docs/SCALING_EXPERIMENT_V1.md`](docs/SCALING_EXPERIMENT_V1.md).
+
 Install the lightweight CPU runtime with:
 
 ```powershell

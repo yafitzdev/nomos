@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import time
 from collections import Counter
 from pathlib import Path
 from typing import Any, Sequence
@@ -11,26 +13,50 @@ from typing import Any, Sequence
 from fitz_tool.dense_router import candidate_document, eligible_tools, query_document
 
 
-def _states(paths: list[Path], limit_per_input: int) -> tuple[list[dict[str, Any]], Counter[str]]:
+def _states(paths: list[Path], limit_per_input: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    counts: Counter[str] = Counter()
+    source_counts: Counter[str] = Counter()
+    trainable_counts: Counter[str] = Counter()
+    skipped: Counter[str] = Counter()
     for path in paths:
         with path.open("r", encoding="utf-8") as handle:
             for line in handle:
                 if not line.strip():
                     continue
+                source_counts[str(path)] += 1
                 row = json.loads(line)
-                if row.get("evaluation_partition") != "train" or row.get("task_kind") == "verify":
+                if row.get("evaluation_partition") != "train":
+                    skipped["non_train_partition"] += 1
+                    continue
+                if row.get("task_kind") == "verify":
+                    skipped["verify"] += 1
                     continue
                 if not (row.get("label") or {}).get("acceptable_tools"):
+                    skipped["no_acceptable_tool"] += 1
                     continue
                 rows.append(row)
-                counts[str(path)] += 1
-                if limit_per_input > 0 and counts[str(path)] >= limit_per_input:
+                trainable_counts[str(path)] += 1
+                if limit_per_input > 0 and trainable_counts[str(path)] >= limit_per_input:
                     break
     if not rows:
         raise ValueError("no answer-present train rows found")
-    return rows, counts
+    decision_ids = [str(row.get("decision_state_id") or "") for row in rows]
+    return rows, {
+        "input_row_counts": dict(sorted(source_counts.items())),
+        "trainable_row_counts": dict(sorted(trainable_counts.items())),
+        "skipped_row_counts": dict(sorted(skipped.items())),
+        "unique_trainable_rows": len(set(decision_ids)),
+    }
+
+
+def _checkpoint_hash(path: Path) -> str:
+    digest = hashlib.sha256()
+    for file_path in sorted(value for value in path.rglob("*") if value.is_file() and value.name != "nomos_training_manifest.json"):
+        digest.update(str(file_path.relative_to(path)).replace("\\", "/").encode())
+        with file_path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _mine_triplets(model: Any, rows: list[dict[str, Any]], batch_size: int) -> tuple[list[dict[str, str]], dict[str, Any]]:
@@ -123,7 +149,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     args = build_parser().parse_args(argv)
     model = SentenceTransformer(str(args.base_model), local_files_only=True, device=args.device)
-    rows, input_counts = _states(args.input, args.limit_per_input)
+    started = time.perf_counter()
+    rows, input_metadata = _states(args.input, args.limit_per_input)
     triplets, manifest = _mine_triplets(model, rows, args.mining_batch_size)
     loss = losses.TripletLoss(
         model,
@@ -151,14 +178,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         train_dataset=Dataset.from_list(triplets),
         loss=loss,
     )
-    trainer.train()
+    train_result = trainer.train()
     args.output.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(str(args.output))
     manifest.update(
         {
             "base_model": str(args.base_model),
             "inputs": [str(path) for path in args.input],
-            "input_state_counts": dict(sorted(input_counts.items())),
+            **input_metadata,
             "output": str(args.output),
             "epochs": args.epochs,
             "batch_size": args.batch_size,
@@ -168,8 +195,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             "device": args.device,
             "loss": "TripletLoss(COSINE)",
             "negative_mining": "highest-scoring legal non-positive within each registry",
+            "training_duration_seconds": time.perf_counter() - started,
+            "training_loss": float(train_result.training_loss),
+            "training_script": "tools.train_dense_triplet_router.v2",
         }
     )
+    manifest["checkpoint_sha256"] = _checkpoint_hash(args.output)
     (args.output / "nomos_training_manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )

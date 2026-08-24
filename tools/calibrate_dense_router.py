@@ -108,10 +108,26 @@ def _records(
         )
         acceptable = {str(value) for value in row["label"]["acceptable_tools"]}
         top3_correct = bool({tool_id for _score, tool_id in scored[:3]} & acceptable)
+        first_rank = next(
+            (
+                rank
+                for rank, (_score, tool_id) in enumerate(scored, start=1)
+                if tool_id in acceptable
+            ),
+            None,
+        )
+        positive_scores = [score for score, tool_id in scored if tool_id in acceptable]
+        negative_scores = [score for score, tool_id in scored if tool_id not in acceptable]
         records.append(
             {
                 "correct": top3_correct,
                 "answer_present": bool(acceptable),
+                "first_rank": first_rank,
+                "positive_margin": (
+                    max(positive_scores) - max(negative_scores)
+                    if positive_scores and negative_scores
+                    else None
+                ),
                 "features": score_diagnostics([score for score, _tool_id in scored]),
             }
         )

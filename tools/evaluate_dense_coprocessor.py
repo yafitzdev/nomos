@@ -40,10 +40,21 @@ def evaluate(
                 router_version=ranker.version,
                 calibration=ranker.calibration,
             )
-            expected_action = str(row["matrix_cell"]["expected_action"])
             acceptable = {
                 str(value) for value in row["label"]["acceptable_tools"]
             }
+            expected_action = str(
+                row.get("matrix_cell", {}).get("expected_action")
+                or (
+                    "accept_tool_call"
+                    if kind == "verify" and row.get("validation_label", {}).get("valid")
+                    else "reject_tool_call"
+                    if kind == "verify"
+                    else "recommend_tools"
+                    if acceptable
+                    else "abstain"
+                )
+            )
             recommended = [
                 str(item["tool_id"]) for item in response["recommendations"]
             ]
@@ -155,7 +166,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", type=Path, required=True)
     parser.add_argument("--input", type=Path, required=True)
-    parser.add_argument("--partition", choices=("validation", "test"), default="test")
+    parser.add_argument("--partition", default="test")
     parser.add_argument("--device", choices=("cuda", "cpu"), default="cpu")
     parser.add_argument(
         "--query-strategy", choices=("single", "multiview"), default="multiview"
