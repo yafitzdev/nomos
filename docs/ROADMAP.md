@@ -2,8 +2,9 @@
 
 > **Current status:** The historical Fitz-Sage-shaped bootstrap described below
 > is retained only as design history. It is not active training data. The
-> project-agnostic 50k corpus has now passed validation, training and held-out
-> evaluation; see [`GENERIC_NINFER_50K.md`](GENERIC_NINFER_50K.md).
+> retained project-agnostic baseline has passed validation, training and
+> held-out evaluation. The additive generic agentic extension is documented in
+> [`AGENTIC_DATA_V1.md`](AGENTIC_DATA_V1.md).
 
 ## Objective
 
@@ -88,6 +89,26 @@ positive source card cannot prove absence. Absence cases enter the dataset only
 after a multi-source/negative-source manifest exists.
 
 ## Current status
+
+### Generic agentic extension
+
+The agentic v1 matrix and deterministic validator are implemented. The 1,000
+row balanced DeepSeek pilot and the separate 10,000-row DeepSeek extension both
+pass structural validation and the reproducible 25-row sample gate. The scale
+cohort has exact route/recover/verify and candidate-pool coverage, and records
+10,000 unique matrix/type/instance/question signatures. DeepSeek capacity was
+measured through 32 rows per request at 256 concurrent workers; the scale run
+used that batch size and recorded approximately 198 total tokens per row.
+
+The existing generic baseline remains the production comparison point. A
+targeted-only model and a mixed model are trained separately so we can answer
+whether the old clean corpus should be retained rather than accidentally
+creating an unmeasured mixture. The latest results are kept in the ignored
+`runs/nomos_agentic_model_comparison_pilot_v2.json` report and the scaled
+`runs/nomos_agentic_model_comparison_scale_v1.json` report. The scaled
+targeted-only model reaches 0.492/0.774 Recall@1/Recall@3 on the new slice,
+but falls to 0.527/0.800 on the old holdout; the mixed model reaches
+0.456/0.728 and 0.547/0.851 respectively. Neither replaces the baseline.
 
 The active generic line is complete through the 100k portability gate:
 

@@ -185,6 +185,11 @@ def observable_router_state(value: Mapping[str, Any]) -> dict[str, Any]:
         key: value.get(key)
         for key in (
             "question",
+            "task_kind",
+            "proposed_tool_call",
+            "candidate_pool_size",
+            "previous_candidate_ids",
+            "expansion_context",
             "agent_state",
             "history",
             "plan",

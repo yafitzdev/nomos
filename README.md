@@ -28,13 +28,21 @@ legal candidate set. It represents candidates through capability, modality,
 evidence-role, side-effect, prerequisite and schema metadata rather than
 literal tool names. See `docs/GENERIC_ROUTER_V2.md` for the core contract.
 
-The current 50k data line is `matrix.generic.v3`. The matrix creates unique
-state cells, opaque registries and deterministic legality/oracle labels. Local
-NInfer/Qwen is the primary language teacher; DeepSeek can provide a separate
-breadth slice or continue an interrupted run. Each row records its actual
-teacher and model. The separation is deliberate: teacher wording is real LLM
-output, while acceptance and labels remain reproducible and cannot be silently
-changed by a teacher hallucination.
+The retained generic baseline is the `matrix.generic.v3` line. The matrix
+creates unique state cells, opaque registries and deterministic legality/oracle
+labels. Local NInfer/Qwen is the primary language teacher; DeepSeek can provide
+a separate breadth slice or continue an interrupted run. Each row records its
+actual teacher and model. The separation is deliberate: teacher wording is
+real LLM output, while acceptance and labels remain reproducible and cannot be
+silently changed by a teacher hallucination.
+
+The current targeted extension is `nomos-agentic.v1`, documented in
+[`docs/AGENTIC_DATA_V1.md`](docs/AGENTIC_DATA_V1.md). It adds route, recovery
+and deterministic tool-call verification states for candidate pools of 10, 30
+and 100 tools, including unseen tool IDs/families and the explicit
+`request_more_tool_candidates` action. It is additive: the existing clean
+generic baseline is preserved, while Fitz-Sage-specific legacy data remains
+quarantined and ineligible for generic training.
 
 The complete workflow and cohort plan are in
 `docs/GENERIC_NINFER_50K.md`. Older Fitz-Sage-shaped generated data is legacy

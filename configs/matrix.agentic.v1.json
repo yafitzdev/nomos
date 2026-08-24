@@ -1,0 +1,83 @@
+{
+  "matrix_version": "matrix.agentic.v1",
+  "purpose": "Generic routing, call verification, and bounded candidate expansion",
+  "dimensions": {
+    "task_kind": ["route", "recover", "verify"],
+    "target_capability": [
+      "plan_retrieval",
+      "list_sources",
+      "search_content",
+      "exact_pattern_search",
+      "search_metadata",
+      "inspect_structured_schema",
+      "search_structured_records",
+      "inspect_document_structure",
+      "search_document_pages",
+      "read_content",
+      "inspect_code_structure",
+      "inspect_evidence",
+      "expand_context",
+      "compare_evidence",
+      "update_requirements",
+      "assess_evidence",
+      "finalize_selection",
+      "candidate_expansion"
+    ],
+    "candidate_pool_size": [10, 30, 100],
+    "top_k": [1, 3],
+    "validation_case": [
+      "not_applicable",
+      "valid_call",
+      "unknown_tool",
+      "illegal_candidate",
+      "schema_missing_required",
+      "schema_wrong_type",
+      "wrong_modality",
+      "stale_state",
+      "unmet_prerequisite",
+      "side_effect_disallowed"
+    ],
+    "expansion_trigger": [
+      "none",
+      "empty_result",
+      "partial_result",
+      "contradictory_result",
+      "tool_error",
+      "stale_assessment",
+      "budget_pressure"
+    ],
+    "recovery_round": [0, 1, 2],
+    "unseen_axis": ["familiar", "unseen_tool_id", "unseen_tool_family"],
+    "candidate_history_state": ["none", "first_page_failed", "prior_rejected"],
+    "terminal_outcome": [
+      "selected",
+      "expanded",
+      "call_accepted",
+      "call_rejected",
+      "abstain"
+    ]
+  },
+  "observable_ranges": {
+    "remaining_steps": [1, 2, 4, 8],
+    "unresolved_requirement_count": [1, 2, 4],
+    "prior_candidate_count": [0, 3, 6],
+    "candidate_description_budget": [3, 10, 30, 100]
+  },
+  "validity_rules": [
+    "route rows use validation_case=not_applicable, recovery_round=0, and expansion_trigger=none",
+    "recover rows use recovery_round 1 or 2, a non-none expansion_trigger, and exclude prior candidates",
+    "verify rows use recovery_round=0 and validation_case other than not_applicable",
+    "candidate_pool_size equals the number of legal candidates presented to Nomos",
+    "top_k is the number of candidates requested by the caller",
+    "unseen_tool_family changes family semantics without changing capability semantics",
+    "a proposed call is accepted only when tool identity, schema, modality, state, and side-effect checks pass"
+  ],
+  "holdout_axes": [
+    "candidate_pool_size",
+    "unseen_axis",
+    "tool_family",
+    "validation_case",
+    "expansion_trigger",
+    "question_template"
+  ]
+}

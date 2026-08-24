@@ -69,6 +69,10 @@ QUESTION_INTENT_CUES: dict[str, tuple[str, ...]] = {
     "finalize_selection": (
         "finalize", "select", "selection", "commit", "chosen", "fresh", "supported", "close"
     ),
+    "candidate_expansion": (
+        "another", "alternative", "alternatives", "expand", "failed", "insufficient",
+        "more", "next", "remaining", "retry", "unresolved",
+    ),
 }
 
 
@@ -188,6 +192,11 @@ def state_candidate_tokens(
     question_intents = _question_intents(question_tokens)
     tokens.extend(f"question_intent={intent}" for intent in question_intents)
     for field in (
+        "task_kind",
+        "proposed_tool_call",
+        "candidate_pool_size",
+        "previous_candidate_ids",
+        "expansion_context",
         "agent_state",
         "history",
         "plan",

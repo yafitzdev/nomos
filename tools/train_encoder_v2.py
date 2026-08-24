@@ -15,7 +15,13 @@ from fitz_tool.router_v2 import RouterV2Config, save_router_v2, train_router_v2
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, required=True)
+    parser.add_argument(
+        "--input",
+        type=Path,
+        action="append",
+        required=True,
+        help="Input JSONL; repeat to train on a verified mixture of corpora.",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--feature-dim", type=int, default=4096)
@@ -37,22 +43,27 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _read_states(path: Path) -> list[dict[str, Any]]:
+def _read_states(paths: Sequence[Path]) -> list[dict[str, Any]]:
     states: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
-    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-        if not line.strip():
-            continue
-        try:
-            value = json.loads(line)
-        except json.JSONDecodeError as exc:
-            errors.append({"line": line_number, "error": str(exc)})
-            continue
-        report = validate_pilot_state(value) if value.get("pilot_version") else validate_decision_state_v2(value)
-        if report.valid:
-            states.append(value)
-        else:
-            errors.append({"line": line_number, "validation": report.as_dict()})
+    for path in paths:
+        with path.open("r", encoding="utf-8") as handle:
+            for line_number, line in enumerate(handle, start=1):
+                if not line.strip():
+                    continue
+                try:
+                    value = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    errors.append({"path": str(path), "line": line_number, "error": str(exc)})
+                    continue
+                if not isinstance(value, dict):
+                    errors.append({"path": str(path), "line": line_number, "error": "row must be an object"})
+                    continue
+                report = validate_pilot_state(value) if value.get("pilot_version") else validate_decision_state_v2(value)
+                if report.valid:
+                    states.append(value)
+                else:
+                    errors.append({"path": str(path), "line": line_number, "validation": report.as_dict()})
     if errors:
         raise SystemExit(json.dumps({"invalid_rows": len(errors), "examples": errors[:5]}, indent=2))
     return states
@@ -105,6 +116,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             batch_size=args.batch_size,
         ),
     )
+    metadata["input_paths"] = [str(path) for path in args.input]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     save_router_v2(str(args.output), model, metadata)
     print(json.dumps({"output": str(args.output), **metadata}, indent=2, sort_keys=True))
