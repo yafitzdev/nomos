@@ -46,6 +46,15 @@ raw Qwen3-0.6B completion (19/32 or 17/32 versus 23/32). No new checkpoint was
 promoted and no second cohort was generated. See
 [`docs/SCALING_EXPERIMENT_V1.md`](docs/SCALING_EXPERIMENT_V1.md).
 
+The next curriculum is defined, but has not yet been generated or trained.
+`matrix.harness-agentic.v1` adds heterogeneous coding-agent and control-plane
+contrasts that the research-focused cohorts omitted: file discovery versus
+content search, read versus mutation, shell versus process/job control, local
+versus web retrieval, clarification, delegation, capability discovery, goals,
+and accumulated candidate expansion. Tool identities and templates remain
+split-frozen; the matrix operates on capabilities and metadata rather than
+DeepSeek Harness or Fitz-Sage names.
+
 A subsequent controlled backbone bakeoff trained fresh BGE-small,
 GTE-ModernBERT, LFM2.5-Embedding-350M, LFM2.5-Encoder-230M and
 LFM2.5-ColBERT-350M models on the same 40,181 pairs. BGE-small remains the best

@@ -1,0 +1,140 @@
+{
+  "matrix_version": "matrix.harness-agentic.v1",
+  "purpose": "Project-agnostic routing, recovery, and verification coverage for coding-agent and general agent harness tools",
+  "split_ratios": {"train": 0.70, "validation": 0.15, "test": 0.15},
+  "task_mix": {"route": 0.60, "recover": 0.25, "verify": 0.15},
+  "weighted_dimensions": {
+    "candidate_pool_size": {"10": 0.15, "25": 0.40, "50": 0.30, "100": 0.15},
+    "top_k": {"1": 0.10, "3": 0.80, "6": 0.10},
+    "candidate_outcome": {"answer_present": 0.88, "no_suitable_candidate": 0.12},
+    "metadata_quality": {
+      "explicit_complete": 0.45,
+      "explicit_partial": 0.20,
+      "description_inferred": 0.25,
+      "noisy_or_conflicting": 0.10
+    },
+    "description_quality": {
+      "concise": 0.30,
+      "verbose": 0.20,
+      "overlapping": 0.30,
+      "policy_heavy": 0.10,
+      "opaque": 0.10
+    }
+  },
+  "dimensions": {
+    "target_capability": [
+      "workspace_inventory",
+      "find_paths",
+      "search_content",
+      "read_content",
+      "inspect_code_structure",
+      "mutate_content",
+      "execute_command",
+      "inspect_process",
+      "web_search",
+      "fetch_web_content",
+      "inspect_media",
+      "request_user_input",
+      "discover_capabilities",
+      "manage_plan",
+      "manage_goal",
+      "delegate_task",
+      "manage_job",
+      "expand_candidates",
+      "finalize_selection"
+    ],
+    "hard_negative_type": [
+      "workflow_neighbor",
+      "same_family",
+      "schema_confusable",
+      "modality_confusable",
+      "state_ineligible",
+      "side_effect_confusable",
+      "lexical_decoy",
+      "control_plane_confusable"
+    ],
+    "registry_composition": [
+      "coding_balanced",
+      "control_heavy",
+      "retrieval_heavy",
+      "mutation_heavy",
+      "decoy_heavy"
+    ],
+    "query_style": ["direct", "conversational", "terse", "outcome_only", "noisy_user"],
+    "session_state": [
+      "initial",
+      "after_discovery",
+      "after_search_hit",
+      "after_empty_result",
+      "after_tool_error",
+      "after_permission_denial",
+      "after_success"
+    ],
+    "side_effect_policy": [
+      "read_only",
+      "local_writes_allowed",
+      "commands_allowed",
+      "external_writes_allowed"
+    ],
+    "capability_visibility": ["semantic", "opaque"],
+    "schema_shape": ["empty", "single_argument", "nested", "enum_constrained", "optional_heavy"]
+  },
+  "contrast_pairs": [
+    ["workspace_inventory", "find_paths"],
+    ["find_paths", "search_content"],
+    ["search_content", "read_content"],
+    ["read_content", "inspect_code_structure"],
+    ["read_content", "mutate_content"],
+    ["mutate_content", "execute_command"],
+    ["execute_command", "inspect_process"],
+    ["web_search", "fetch_web_content"],
+    ["search_content", "web_search"],
+    ["read_content", "inspect_media"],
+    ["request_user_input", "expand_candidates"],
+    ["discover_capabilities", "expand_candidates"],
+    ["manage_plan", "manage_goal"],
+    ["manage_goal", "finalize_selection"],
+    ["delegate_task", "manage_job"],
+    ["manage_job", "inspect_process"],
+    ["expand_candidates", "finalize_selection"]
+  ],
+  "recovery": {
+    "triggers": [
+      "hidden_tool_requested",
+      "no_suitable_candidate",
+      "empty_result",
+      "partial_result",
+      "tool_error",
+      "timeout",
+      "permission_denial"
+    ],
+    "rounds": [1, 2, 3],
+    "prior_candidate_counts": [3, 6, 9, 12],
+    "candidate_memory": ["accumulated_no_repeat"]
+  },
+  "verification_cases": [
+    "valid_call",
+    "unknown_tool",
+    "hidden_tool",
+    "schema_missing_required",
+    "schema_wrong_type",
+    "schema_extra_property",
+    "wrong_modality",
+    "unmet_prerequisite",
+    "side_effect_disallowed",
+    "repeated_rejected_candidate"
+  ],
+  "freeze_rules": {
+    "registry_namespace_per_split": true,
+    "question_templates_per_split": true,
+    "scenario_group_atomic": true,
+    "tool_identity_never_crosses_split": true,
+    "heldout_tool_families": ["browser_automation", "database_admin", "cloud_deployment"],
+    "heldout_schema_shapes": ["union_typed", "deeply_nested"],
+    "test_rows_never_enter_training": true
+  },
+  "safety_boundary": {
+    "external_write_rows_are_routing_and_call_verification_examples_only": true,
+    "generation_never_executes_selected_tools": true
+  }
+}
