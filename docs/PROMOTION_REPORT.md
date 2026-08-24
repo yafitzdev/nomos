@@ -126,10 +126,10 @@ another candidate page.
 | Qwen3-0.6B, old encoder top-3, raw | 13/32 | 63.2% | 88.9% | 10 | 9 |
 | Qwen3-0.6B, promoted encoder top-3, raw | 23/32 | 77.7% | 95.4% | 6 | 3 |
 | Qwen3-0.6B, promoted complete coprocessor | 26/32 | 86.9% | 92.1% | 11 | 6 |
-| DeepSeek-v4-flash, all 34 tools, raw | 7/8 | 87.5% | 96.9% | 0 | 1 |
-| DeepSeek-v4-flash, old encoder top-3, raw | 8/8 | 100.0% | 100.0% | 0 | 0 |
-| DeepSeek-v4-flash, promoted encoder top-3, raw | 8/8 | 100.0% | 100.0% | 0 | 0 |
-| DeepSeek-v4-flash, promoted complete coprocessor | 8/8 | 100.0% | 100.0% | 0 | 0 |
+| DeepSeek-v4-flash, all 34 tools, raw | 30/32 | 93.8% | 98.6% | 0 | 2 |
+| DeepSeek-v4-flash, old encoder top-3, raw | 32/32 | 100.0% | 100.0% | 0 | 0 |
+| DeepSeek-v4-flash, promoted encoder top-3, raw | 32/32 | 100.0% | 100.0% | 0 | 0 |
+| DeepSeek-v4-flash, promoted complete coprocessor | 32/32 | 100.0% | 100.0% | 0 | 0 |
 
 The 32 local cases exhaustively pair eight workflows with four opaque registry
 styles. The promoted encoder passes ten paired cases that the old encoder
@@ -148,17 +148,21 @@ coprocessor recovers three raw failures and loses none, reaching 26/32. Its six
 remaining failures are three exact-symbol cases, two catalog/provenance cases,
 and one release-readiness case.
 
-The strong agent saturates the earlier eight-task pairing with either encoder,
-so it proves raw top-three filtering can work but cannot resolve the old/new
-difference. The 32-case local cross-product is stronger evidence for the
-promoted model, although the cases still share eight workflow templates and
-therefore are not 32 fully independent real-world tasks.
+Across the same 32-case cross-product, DeepSeek completes 30/32 with all 34
+tools and 32/32 with either encoder's raw top-three. Its two full-registry
+failures both confuse `list_sources` with `plan_retrieval` in the implementation
+discrepancy workflow; top-three filtering removes that distraction. DeepSeek
+still cannot resolve the old/new encoder difference because it saturates both.
+The local weak-agent comparison is therefore the useful discriminator. These
+cases share eight workflow templates and are not 32 fully independent
+real-world tasks.
 
 For the local agent, full-registry raw prompts averaged 2,345 tokens per tool
 call attempt; promoted raw top-three prompts averaged 328, an 86.0% reduction.
-The complete coprocessor added no benefit in the earlier strong-agent run
-because all raw top-three calls were already valid and correct. In the expanded
-weak-agent run it recovered three additional tasks over raw top-three, not the
+For DeepSeek, the corresponding values are 2,371 and 339 tokens, an 85.7%
+reduction. The complete coprocessor adds no completions beyond DeepSeek's raw
+top-three because all 152 calls are already valid and correct. In the expanded
+weak-agent run it recovers three additional tasks over raw top-three, not the
 entire 23-task gain.
 
 Local run outputs (intentionally ignored by git with the other generated runs):
@@ -169,6 +173,8 @@ Local run outputs (intentionally ignored by git with the other generated runs):
 - `runs/nomos_mixed_raw_ablation_strong_8_v1.json`
 - `runs/nomos_contrast_replay_raw_ablation_weak_cross32_v1.json`
 - `runs/nomos_mixed_raw_ablation_weak_cross32_v1.json`
+- `runs/nomos_contrast_replay_raw_ablation_strong_cross32_v1.json`
+- `runs/nomos_mixed_raw_ablation_strong_cross32_v1.json`
 
 ## CPU deployment
 

@@ -29,7 +29,9 @@ local Qwen3-0.6B agent was tested across all 32 workflow-by-registry
 combinations: it improves from 0/32 completed tasks with one-shot access to the
 raw full registry to 23/32 with one-shot raw Nomos top-three proposals. The
 complete coprocessor reaches 26/32. Raw top-three uses 86.0% fewer prompt tokens
-per call attempt.
+per call attempt. DeepSeek-v4-flash improves from 30/32 with the full registry
+to 32/32 with either encoder's raw top-three, using 85.7% fewer prompt tokens
+per attempt.
 
 The promoted deployment is a 127.6 MiB FP32 ONNX encoder plus deterministic
 validation, confidence, repair, and no-repeat recovery code. See
