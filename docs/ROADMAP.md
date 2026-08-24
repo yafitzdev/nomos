@@ -122,6 +122,22 @@ raw scores as calibrated confidence. A first calibration audit of the retained
 requests. This is evidence that the ranking model must improve; thresholding or
 scaling the existing recipe is not enough.
 
+The first v2 architecture ablations now favor a compact dense bi-encoder. A
+one-epoch BGE-small rehearsal mix used 20,000 retained generic train pairs plus
+4,185 answer-present v2 train pairs. On untouched tests it reaches 99.22%
+Recall@3 on the deterministic v2 suite and 95.6% on the old generic holdout,
+which is a one-point regression from the retained baseline. On DeepSeek v1
+wording it reaches 93.6% for route states but only 61.2% for underspecified
+recovery states. The 99.22% v2 number is not a promotion result because v2's
+deterministic train/test wording still shares capability-focus phrases.
+
+Adding absolute cosine features to the confidence layer raises v2 test coverage
+at a 1% selective-risk target from less than 1% to 70.5%. Observed test risk is
+0.63%, no-suitable-tool recall is 97.7%, and false abstention is 12.8%. The
+validation/test coverage gap and false-abstention rate remain too large. The
+next evidence gate is independently worded and executed multi-step sessions,
+not a larger synthetic generation run.
+
 The active generic line is complete through the 100k portability gate:
 
 - `data/generated/nomos_generic_ninfer_50000.jsonl` contains 50,000 rows from

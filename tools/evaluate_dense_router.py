@@ -81,6 +81,7 @@ def _score_rows(model: Any, rows: list[dict[str, Any]], batch_size: int) -> dict
 
     overall: Counter[str] = Counter()
     groups: dict[str, Counter[str]] = {}
+    pool_groups: dict[str, Counter[str]] = {}
     disagreements = []
     for row, tools, query_embedding in zip(rows, row_tools, query_embeddings):
         scores = [float(np.dot(query_embedding, by_fingerprint[tool.semantic_fingerprint])) for tool in tools]
@@ -99,7 +100,8 @@ def _score_rows(model: Any, rows: list[dict[str, Any]], batch_size: int) -> dict
         )
         kind = str(row.get("task_kind") or "generic")
         group = groups.setdefault(kind, Counter())
-        for counter in (overall, group):
+        pool_group = pool_groups.setdefault(str(len(tools)), Counter())
+        for counter in (overall, group, pool_group):
             counter["states"] += 1
             counter["recall_at_1"] += int(first_rank == 1)
             counter["recall_at_3"] += int(first_rank is not None and first_rank <= 3)
@@ -126,6 +128,7 @@ def _score_rows(model: Any, rows: list[dict[str, Any]], batch_size: int) -> dict
     return {
         "metrics": _finish(overall),
         "by_task_kind": {key: _finish(value) for key, value in sorted(groups.items())},
+        "by_pool_size": {key: _finish(value) for key, value in sorted(pool_groups.items())},
         "unique_candidate_semantics": len(candidate_texts),
         "disagreements": disagreements,
     }

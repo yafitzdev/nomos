@@ -11,14 +11,18 @@ CALIBRATION_FEATURES = (
     "probability_margin",
     "normalized_entropy",
     "log_candidate_count",
+    "top_score",
+    "score_margin",
+    "top3_mean",
+    "score_standard_deviation",
 )
 
 
 def predict_confidence(calibration: Mapping[str, Any], features: Mapping[str, float]) -> float:
     value = float(calibration["intercept"])
     coefficients = calibration["coefficients"]
-    for name in CALIBRATION_FEATURES:
-        value += float(coefficients[name]) * float(features[name])
+    for name, coefficient in coefficients.items():
+        value += float(coefficient) * float(features.get(str(name), 0.0))
     return 1.0 / (1.0 + math.exp(-max(-80.0, min(80.0, value))))
 
 

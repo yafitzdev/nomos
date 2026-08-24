@@ -27,23 +27,35 @@ def score_diagnostics(scores: list[float]) -> dict[str, float]:
             "probability_margin": 0.0,
             "normalized_entropy": 1.0,
             "log_candidate_count": 0.0,
+            "top_score": 0.0,
+            "score_margin": 0.0,
+            "top3_mean": 0.0,
+            "score_standard_deviation": 0.0,
         }
     offset = max(scores)
     exponentials = [math.exp(min(80.0, score - offset)) for score in scores]
     total = sum(exponentials)
     probabilities = [value / total for value in exponentials]
     ordered = sorted(probabilities, reverse=True)
+    ordered_scores = sorted(scores, reverse=True)
     margin = ordered[0] - (ordered[1] if len(ordered) > 1 else 0.0)
     if len(probabilities) == 1:
         entropy = 0.0
     else:
         entropy = -sum(value * math.log(max(value, 1e-12)) for value in probabilities)
         entropy /= math.log(len(probabilities))
+    score_mean = sum(scores) / len(scores)
     return {
         "raw_top_probability": ordered[0],
         "probability_margin": margin,
         "normalized_entropy": entropy,
         "log_candidate_count": math.log1p(len(scores)),
+        "top_score": ordered_scores[0],
+        "score_margin": ordered_scores[0] - (ordered_scores[1] if len(scores) > 1 else 0.0),
+        "top3_mean": sum(ordered_scores[:3]) / min(3, len(ordered_scores)),
+        "score_standard_deviation": math.sqrt(
+            sum((score - score_mean) ** 2 for score in scores) / len(scores)
+        ),
     }
 
 
