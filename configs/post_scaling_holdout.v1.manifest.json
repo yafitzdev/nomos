@@ -1,0 +1,18 @@
+{
+  "abstention_count": 36,
+  "answer_present_count": 720,
+  "count": 756,
+  "frozen_at": "2026-08-24T00:00:00+00:00",
+  "holdout_version": "nomos-post-scaling-holdout.v1",
+  "matrix_version": "matrix.post-scaling-holdout.v1",
+  "registry_hashes_sha256": "fb970af7ff81b1880c2ba0296542e1a9b2ff90cef5c892b1495d18046f0627e7",
+  "rows_sha256": "322d2cdc02e02287227152574022921305d3dc0d5c349764bd012ee84b1abfdd",
+  "scenario_hashes_sha256": "75f07ecaac27d7335da94473277f5f0f401443cf381522dcb596300af8f8d474",
+  "seed": 20269991,
+  "source_hashes_sha256": "ed6c1ffb2d6ff9d3169ba71c272db7334866566faeba44da073d6ad4e2081a09",
+  "template_hashes_sha256": "2ad2f55e6843440aec4cdc0d51841b505df744ce827dfc3f836272c4915f6212",
+  "training_dataset_forbidden": "nomos-scaling-targeted.v1",
+  "unique_matrix_cells": 756,
+  "unique_registry_fingerprints": 756,
+  "unique_templates": 63
+}

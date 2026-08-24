@@ -1,0 +1,11 @@
+{
+  "assignments_sha256": "797c50a576c80d4444f541863a5a9653ae3cb1bb6587732d7ec3d85df5565c54",
+  "count": 25000,
+  "dataset_version": "nomos-scaling-targeted.v1",
+  "matrix_spec": "configs/matrix.scaling.v1.json",
+  "matrix_spec_sha256": "f8579eb8b06179b27299d675acd3c89f9562ca7410207948e6109525e4c4c4ae",
+  "matrix_version": "matrix.scaling.v1",
+  "prompt_version": "scaling-targeted-deepseek.v2",
+  "unique_assignment_ids": 25000,
+  "unique_matrix_cells": 25000
+}

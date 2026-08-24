@@ -1,0 +1,123 @@
+{
+  "matrix_version": "matrix.scaling.v1",
+  "dataset_version": "nomos-scaling-targeted.v1",
+  "target_accepted_rows": 25000,
+  "seed": 20260903,
+  "purpose": "Failure-focused, project-agnostic tool-routing scale cohort with fixed slots and deterministic labels",
+  "scenario_family_counts": {
+    "broad_vs_exact_search": 1500,
+    "inventory_vs_metadata": 1500,
+    "plan_vs_immediate_search": 1000,
+    "plan_vs_final_selection": 1000,
+    "document_structure_vs_pages": 1000,
+    "schema_vs_records": 1000,
+    "code_symbol_vs_full_read": 1500,
+    "inspect_vs_compare_evidence": 1000,
+    "compare_vs_assess_evidence": 1000,
+    "assess_vs_finalize": 1500,
+    "requirements_vs_assess": 1000,
+    "requirements_vs_finalize": 1000,
+    "partial_context_vs_new_search": 1000,
+    "search_results_vs_provenance": 1000,
+    "search_vs_full_read": 1000,
+    "missing_prerequisite": 1000,
+    "illegal_attractive_candidate": 1000,
+    "no_suitable_tool": 1000,
+    "modality_confusion": 1000,
+    "side_effect_policy": 1000,
+    "recovery_after_rejection": 1000,
+    "stale_terminal_history": 1000,
+    "conflicting_irrelevant_history": 1000
+  },
+  "dimension_counts": {
+    "candidate_pool_size": {
+      "10": 5000,
+      "17": 5000,
+      "34": 5000,
+      "50": 5000,
+      "100": 5000
+    },
+    "source_modality": {
+      "text": 3572,
+      "structured_data": 3572,
+      "document": 3572,
+      "code": 3571,
+      "image": 3571,
+      "audio": 3571,
+      "mixed": 3571
+    },
+    "side_effect_policy": {
+      "read_only": 5000,
+      "external_read": 5000,
+      "reversible_write": 5000,
+      "destructive_forbidden": 5000,
+      "mixed_policy": 5000
+    },
+    "session_position": {
+      "initial": 6250,
+      "middle": 6250,
+      "late": 6250,
+      "terminal": 6250
+    },
+    "history_length": {
+      "empty": 8334,
+      "short": 8333,
+      "long": 8333
+    },
+    "wording_style": {
+      "conversational": 6250,
+      "direct": 6250,
+      "constraint_heavy": 6250,
+      "outcome_oriented": 6250
+    },
+    "registry_description_style": {
+      "procedural": 5000,
+      "endpoint": 5000,
+      "compact": 5000,
+      "responsibility": 5000,
+      "contract": 5000
+    },
+    "capability_visibility": {
+      "semantic": 12500,
+      "opaque": 12500
+    },
+    "argument_schema_style": {
+      "flat_required": 5000,
+      "flat_optional": 5000,
+      "nested_object": 5000,
+      "array_filter": 5000,
+      "enum_command": 5000
+    },
+    "initial_target_position": {
+      "first": 6250,
+      "second": 6250,
+      "third": 6250,
+      "later": 6250
+    },
+    "history_transition": {
+      "none": 5000,
+      "completed_neighbor": 5000,
+      "failed_candidates": 5000,
+      "stale_goal": 5000,
+      "irrelevant_conflict": 5000
+    }
+  },
+  "generation": {
+    "model": "deepseek-v4-flash",
+    "thinking": "disabled",
+    "batch_size": 16,
+    "concurrency": 512,
+    "max_tokens": 8000,
+    "timeout_seconds": 180,
+    "same_batch_attempts": 2,
+    "split_sizes": [8, 4],
+    "response_format": "json_object"
+  },
+  "holdout_forbidden": {
+    "registry_styles": ["lattice", "meridian", "prism", "vanguard"],
+    "tool_family_prefixes": ["hold_la", "hold_me", "hold_pr", "hold_va"],
+    "schema_styles": ["holdout_tuple", "holdout_discriminated", "holdout_map"],
+    "template_prefix": "postscale-holdout-v1",
+    "seed": 20269991
+  }
+}
