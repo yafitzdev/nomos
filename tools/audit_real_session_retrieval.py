@@ -9,6 +9,12 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from fitz_tool.dense_router import candidate_views, query_document, weighted_query_views
+from fitz_tool.embedding_backend import (
+    encode_documents,
+    encode_queries,
+    load_embedding_model,
+    similarity_matrix,
+)
 from fitz_tool.external_registry_fixtures import EXTERNAL_REGISTRY_STYLES, build_external_registry
 from fitz_tool.final_holdout_fixtures import (
     FINAL_HOLDOUT_VERSION,
@@ -51,8 +57,6 @@ def audit(
     candidate_strategy: str,
     suite: str = "development",
 ) -> dict[str, Any]:
-    import numpy as np
-
     if suite == "final":
         styles = FINAL_REGISTRY_STYLES
         workflows = FINAL_WORKFLOWS
@@ -107,10 +111,10 @@ def audit(
     flat_candidate_texts = [
         text for key in candidate_keys for text in candidate_texts[key]
     ]
-    flat_candidate_embeddings = model.encode(
+    flat_candidate_embeddings = encode_documents(
+        model,
         flat_candidate_texts,
         batch_size=batch_size,
-        normalize_embeddings=True,
         show_progress_bar=True,
     )
     candidate_by_key = {}
@@ -120,12 +124,11 @@ def audit(
         candidate_by_key[key] = flat_candidate_embeddings[offset : offset + count]
         offset += count
     view_keys = list(view_texts)
-    view_embeddings = model.encode(
+    view_embeddings = encode_queries(
+        model,
         view_keys,
         batch_size=batch_size,
-        normalize_embeddings=True,
         show_progress_bar=True,
-        prompt_name="query" if "query" in getattr(model, "prompts", {}) else None,
     )
     view_by_text = dict(zip(view_keys, view_embeddings))
 
@@ -136,8 +139,10 @@ def audit(
             score = sum(
                 weight
                 * float(
-                    np.dot(
-                        candidate_by_key[tool.semantic_fingerprint], view_by_text[text]
+                    similarity_matrix(
+                        model,
+                        [view_by_text[text]],
+                        candidate_by_key[tool.semantic_fingerprint],
                     ).max()
                 )
                 for text, weight in views
@@ -230,11 +235,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         model = OnnxSentenceEncoder(args.model)
     else:
-        from sentence_transformers import SentenceTransformer
-
-        model = SentenceTransformer(
-            str(args.model), local_files_only=True, device=args.device
-        )
+        model = load_embedding_model(args.model, device=args.device)
     report = {
         "model": str(args.model),
         "device": args.device,

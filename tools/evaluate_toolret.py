@@ -10,6 +10,12 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from fitz_tool.hybrid_retrieval import bm25_scores, reciprocal_rank_fusion
+from fitz_tool.embedding_backend import (
+    encode_documents,
+    encode_queries,
+    load_embedding_model,
+    similarity_matrix,
+)
 
 
 TASK_CATEGORY = {
@@ -162,10 +168,10 @@ def evaluate(
             for row in tools
         ]
         flat_tool_views = [view for views in tool_views for view in views]
-        flat_tool_embeddings = model.encode(
+        flat_tool_embeddings = encode_documents(
+            model,
             flat_tool_views,
             batch_size=batch_size,
-            normalize_embeddings=True,
             show_progress_bar=True,
         )
         query_texts = []
@@ -174,14 +180,13 @@ def evaluate(
             if use_instruction and row.get("instruction"):
                 query = f"Routing objective: {row['instruction']}\nUser request: {query}"
             query_texts.append(query)
-        query_embeddings = model.encode(
+        query_embeddings = encode_queries(
+            model,
             query_texts,
             batch_size=batch_size,
-            normalize_embeddings=True,
             show_progress_bar=True,
-            prompt_name="query" if "query" in getattr(model, "prompts", {}) else None,
         )
-        flat_scores = np.asarray(query_embeddings) @ np.asarray(flat_tool_embeddings).T
+        flat_scores = similarity_matrix(model, query_embeddings, flat_tool_embeddings)
         if candidate_strategy == "multiview":
             score_columns = []
             offset = 0
@@ -332,11 +337,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         model = OnnxSentenceEncoder(args.model)
     else:
-        from sentence_transformers import SentenceTransformer
-
-        model = SentenceTransformer(
-            str(args.model), local_files_only=True, device=args.device
-        )
+        model = load_embedding_model(args.model, device=args.device)
     if args.max_seq_length > 0:
         model.max_seq_length = args.max_seq_length
     reranker = None

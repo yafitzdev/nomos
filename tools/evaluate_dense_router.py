@@ -15,6 +15,12 @@ from fitz_tool.dense_router import (
     eligible_tools,
     query_document,
 )
+from fitz_tool.embedding_backend import (
+    encode_documents,
+    encode_queries,
+    load_embedding_model,
+    similarity_matrix,
+)
 
 
 def _sample(path: Path, limit: int, seed: int, partitions: set[str]) -> tuple[list[dict[str, Any]], int]:
@@ -54,8 +60,6 @@ def _finish(counter: Counter[str]) -> dict[str, float | int]:
 
 
 def _score_rows(model: Any, rows: list[dict[str, Any]], batch_size: int) -> dict[str, Any]:
-    import numpy as np
-
     queries = [query_document(row) for row in rows]
     candidate_texts: dict[str, str] = {}
     row_tools = []
@@ -66,19 +70,18 @@ def _score_rows(model: Any, rows: list[dict[str, Any]], batch_size: int) -> dict
             candidate_texts.setdefault(tool.semantic_fingerprint, candidate_document(tool))
 
     fingerprints = sorted(candidate_texts)
-    candidate_embeddings = model.encode(
+    candidate_embeddings = encode_documents(
+        model,
         [candidate_texts[value] for value in fingerprints],
         batch_size=batch_size,
-        normalize_embeddings=True,
         show_progress_bar=True,
     )
     by_fingerprint = dict(zip(fingerprints, candidate_embeddings))
-    query_embeddings = model.encode(
+    query_embeddings = encode_queries(
+        model,
         queries,
         batch_size=batch_size,
-        normalize_embeddings=True,
         show_progress_bar=True,
-        prompt_name="query" if "query" in getattr(model, "prompts", {}) else None,
     )
 
     overall: Counter[str] = Counter()
@@ -88,7 +91,11 @@ def _score_rows(model: Any, rows: list[dict[str, Any]], batch_size: int) -> dict
     scenario_groups: dict[str, Counter[str]] = {}
     disagreements = []
     for row, tools, query_embedding in zip(rows, row_tools, query_embeddings):
-        scores = [float(np.dot(query_embedding, by_fingerprint[tool.semantic_fingerprint])) for tool in tools]
+        scores = similarity_matrix(
+            model,
+            [query_embedding],
+            [by_fingerprint[tool.semantic_fingerprint] for tool in tools],
+        )[0].tolist()
         ranked = [
             tool
             for _score, tool in sorted(
@@ -170,6 +177,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--limit", type=int, default=10000)
     parser.add_argument("--seed", type=int, default=20260826)
     parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--device", choices=("cuda", "cpu"), default="cpu")
     parser.add_argument("--output", type=Path, required=True)
     return parser
 
@@ -177,13 +185,13 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if (args.model / "nomos_runtime.json").exists():
+        if args.device != "cpu":
+            raise SystemExit("the packaged ONNX runtime currently supports CPU only")
         from fitz_tool.onnx_encoder import OnnxSentenceEncoder
 
         model = OnnxSentenceEncoder(args.model)
     else:
-        from sentence_transformers import SentenceTransformer
-
-        model = SentenceTransformer(str(args.model), local_files_only=True)
+        model = load_embedding_model(args.model, device=args.device)
     reports: dict[str, Mapping[str, Any]] = {}
     for index, path in enumerate(args.input):
         rows, eligible = _sample(path, args.limit, args.seed + index, set(args.partition))
@@ -193,6 +201,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "model": str(args.model),
         "text_version": DENSE_TEXT_VERSION,
         "partitions": list(args.partition),
+        "device": args.device,
         "inputs": reports,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -16,7 +16,7 @@ runtime = ["numpy>=1.26", "onnxruntime>=1.20", "tokenizers>=0.21"]
 train = [
   "datasets>=2.20",
   "onnx>=1.17",
-  "sentence-transformers>=5.2,<6",
+  "sentence-transformers>=6,<7",
   "torch>=2.4",
   "transformers>=4.48",
 ]

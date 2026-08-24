@@ -13,6 +13,12 @@ from .dense_router import (
     query_document,
     weighted_query_views,
 )
+from .embedding_backend import (
+    encode_documents,
+    encode_queries,
+    load_embedding_model,
+    similarity_matrix,
+)
 
 
 class DenseToolRanker:
@@ -58,11 +64,7 @@ class DenseToolRanker:
                 raise ValueError("the packaged ONNX runtime currently supports CPU only")
             model = OnnxSentenceEncoder(artifact)
         else:
-            from sentence_transformers import SentenceTransformer
-
-            model = SentenceTransformer(
-                str(artifact), local_files_only=True, device=device
-            )
+            model = load_embedding_model(artifact, device=device)
         ranker = cls(
             model,
             model_name=artifact.name,
@@ -81,16 +83,12 @@ class DenseToolRanker:
         return f"dense:{self.model_name}:{DENSE_TEXT_VERSION}"
 
     def _encode(self, texts: list[str], *, query: bool) -> Any:
-        kwargs: dict[str, Any] = {"normalize_embeddings": True}
-        if query and "query" in getattr(self.model, "prompts", {}):
-            kwargs["prompt_name"] = "query"
-        return self.model.encode(texts, **kwargs)
+        encoder = encode_queries if query else encode_documents
+        return encoder(self.model, texts)
 
     def rank(
         self, request: Mapping[str, Any], *, top_k: int | None = None
     ) -> list[dict[str, Any]]:
-        import numpy as np
-
         tools = eligible_tools(request)
         missing = [
             tool for tool in tools if tool.semantic_fingerprint not in self._candidate_cache
@@ -125,7 +123,13 @@ class DenseToolRanker:
             candidate_embeddings = self._candidate_cache[tool.semantic_fingerprint]
             score = sum(
                 weight
-                * float(np.dot(candidate_embeddings, query_embedding).max())
+                * float(
+                    similarity_matrix(
+                        self.model,
+                        [query_embedding],
+                        candidate_embeddings,
+                    ).max()
+                )
                 for query_embedding, (_text, weight) in zip(
                     query_embeddings, query_views
                 )

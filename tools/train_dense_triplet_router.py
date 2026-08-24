@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from fitz_tool.dense_router import candidate_document, eligible_tools, query_document
+from fitz_tool.embedding_backend import encode_documents, encode_queries
 
 
 def _states(paths: list[Path], limit_per_input: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -71,19 +72,18 @@ def _mine_triplets(model: Any, rows: list[dict[str, Any]], batch_size: int) -> t
         for tool in tools:
             candidate_text.setdefault(tool.semantic_fingerprint, candidate_document(tool))
     fingerprints = sorted(candidate_text)
-    candidate_embeddings = model.encode(
+    candidate_embeddings = encode_documents(
+        model,
         [candidate_text[value] for value in fingerprints],
         batch_size=batch_size,
-        normalize_embeddings=True,
         show_progress_bar=True,
     )
     by_fingerprint = dict(zip(fingerprints, candidate_embeddings))
-    query_embeddings = model.encode(
+    query_embeddings = encode_queries(
+        model,
         queries,
         batch_size=batch_size,
-        normalize_embeddings=True,
         show_progress_bar=True,
-        prompt_name="query" if "query" in getattr(model, "prompts", {}) else None,
     )
 
     triplets: list[dict[str, str]] = []

@@ -46,6 +46,13 @@ raw Qwen3-0.6B completion (19/32 or 17/32 versus 23/32). No new checkpoint was
 promoted and no second cohort was generated. See
 [`docs/SCALING_EXPERIMENT_V1.md`](docs/SCALING_EXPERIMENT_V1.md).
 
+A subsequent controlled backbone bakeoff trained fresh BGE-small,
+GTE-ModernBERT, LFM2.5-Embedding-350M, LFM2.5-Encoder-230M and
+LFM2.5-ColBERT-350M models on the same 40,181 pairs. BGE-small remains the best
+overall deployment family; see
+[`docs/BACKBONE_BAKEOFF_V1.md`](docs/BACKBONE_BAKEOFF_V1.md) for the complete
+raw top-k and CPU comparison.
+
 Install the lightweight CPU runtime with:
 
 ```powershell
