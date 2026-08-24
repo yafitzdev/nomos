@@ -112,6 +112,17 @@ python -m tools.evaluate_runner_contract --input data/generated/nomos_generic_po
 The harness is a contract/state-transition test only. Its capability simulator
 does not replace real tool execution or V2 runner acceptance.
 
+For project-neutral token-cost measurement, replay captured OpenAI-compatible
+tool-decision requests with the full registry and raw Nomos top-k:
+
+```text
+python -m tools.benchmark_nomos_openai_ab --input data/accepted/real_agent_decisions.jsonl --nomos-model artifacts/nomos_v1_nano_g1_release --tokenizer <agent-tokenizer> --top-k 3 --output runs/nomos_openai_ab.json --trace-output runs/nomos_openai_ab_traces.jsonl
+```
+
+Add `--endpoint` for a paired live replay using provider-reported usage. The
+input contract, metadata extension, metrics, and safety boundaries are defined
+in `docs/NOMOS_TOKEN_SAVINGS_HARNESS.md`.
+
 The completed registry-aware pilot uses the following reproducible workflow.
 Generated rows, reports and model artifacts stay ignored by git:
 
