@@ -262,7 +262,13 @@ Assignments:
 
 
 def _request_batch(
-    assignments: list[dict[str, Any]], *, api_key: str, model: str, timeout: float, retries: int
+    assignments: list[dict[str, Any]],
+    *,
+    api_key: str,
+    model: str,
+    timeout: float,
+    retries: int,
+    max_tokens: int,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     payload = {
         "model": model,
@@ -270,7 +276,7 @@ def _request_batch(
             {"role": "system", "content": "Generate rigorous synthetic routing data as JSON."},
             {"role": "user", "content": _prompt(assignments)},
         ],
-        "max_tokens": 5000,
+        "max_tokens": max_tokens,
         "temperature": 0.8,
         "top_p": 0.9,
         "stream": False,
@@ -288,6 +294,9 @@ def _request_batch(
         try:
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 body = json.loads(response.read())
+            finish_reason = str(body["choices"][0].get("finish_reason") or "")
+            if finish_reason != "stop":
+                raise ValueError(f"unexpected finish reason: {finish_reason}")
             content = json.loads(body["choices"][0]["message"]["content"])
             items = content.get("items")
             if not isinstance(items, list) or len(items) != len(assignments):
@@ -413,6 +422,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model", default="deepseek-v4-flash")
     parser.add_argument("--timeout", type=float, default=180.0)
     parser.add_argument("--retries", type=int, default=3)
+    parser.add_argument("--max-tokens", type=int, default=5000)
     parser.add_argument(
         "--source-cache",
         type=Path,
@@ -428,8 +438,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     api_key = os.environ.get("FITZ_TOOL_DEEPSEEK_API_KEY") or os.environ.get("DEEPSEEK_API_KEY")
     if not api_key:
         raise SystemExit("set FITZ_TOOL_DEEPSEEK_API_KEY")
-    if min(args.count, args.batch_size, args.concurrency) < 1:
-        raise SystemExit("count, batch size, and concurrency must be positive")
+    if min(args.count, args.batch_size, args.concurrency, args.max_tokens) < 1:
+        raise SystemExit("count, batch size, concurrency, and max tokens must be positive")
     started = time.perf_counter()
     excluded_hashes: set[str] = set()
     if args.exclude_input:
@@ -480,6 +490,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     model=args.model,
                     timeout=args.timeout,
                     retries=args.retries,
+                    max_tokens=args.max_tokens,
                 ): batch
                 for batch in batches
             }
@@ -545,6 +556,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "prompt_version": PROMPT_VERSION,
         "batch_size": args.batch_size,
         "concurrency": args.concurrency,
+        "max_tokens": args.max_tokens,
         "usage": dict(usage),
         "teacher_fallback_rows": sum(
             bool(row["provenance"]["teacher_fallback_used"]) for row in generated_rows
