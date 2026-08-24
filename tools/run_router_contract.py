@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from fitz_tool.coprocessor import coprocessor_response
+from fitz_tool.dense_selector import DenseToolRanker
 from fitz_tool.generic_contracts import validate_runner_request_v2
 from fitz_tool.router_v2 import load_router_v2, rank_tools_v2
 from fitz_tool.tool_registry import ToolRegistry
@@ -19,7 +20,9 @@ RESPONSE_VERSION = "router-response.v2"
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", choices=("model", "candidate_order"), default="model")
+    parser.add_argument(
+        "--mode", choices=("dense", "model", "candidate_order"), default="dense"
+    )
     parser.add_argument("--artifact", type=Path)
     return parser
 
@@ -43,13 +46,23 @@ def route_request(
     mode: str,
     model: Any | None,
     metadata: Mapping[str, Any] | None,
+    ranker: DenseToolRanker | None = None,
 ) -> dict[str, Any]:
     report = validate_runner_request_v2(request)
     if not report.valid:
         raise ValueError(json.dumps(report.as_dict(), sort_keys=True))
-    if mode == "candidate_order":
+    operation = str(request.get("operation") or "")
+    if operation == "verify_tool_call" or request.get("proposed_tool_call") is not None:
+        ranked = []
+        router_version = ranker.version if ranker else "deterministic-verifier"
+    elif mode == "candidate_order":
         ranked = _candidate_order_ranked(request)
         router_version = "candidate-order-baseline"
+    elif mode == "dense":
+        if ranker is None:
+            raise ValueError("dense mode requires an artifact")
+        ranked = ranker.rank(request)
+        router_version = ranker.version
     else:
         if model is None or metadata is None:
             raise ValueError("model mode requires an artifact")
@@ -59,17 +72,21 @@ def route_request(
         request,
         ranked,
         router_version=router_version,
-        calibration=(metadata or {}).get("confidence_calibration"),
+        calibration=(ranker.calibration if ranker else None)
+        or (metadata or {}).get("confidence_calibration"),
     )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    if args.mode == "model" and args.artifact is None:
-        raise SystemExit("--artifact is required in model mode")
+    if args.mode in {"dense", "model"} and args.artifact is None:
+        raise SystemExit("--artifact is required in dense or model mode")
     model = metadata = None
+    ranker = None
     if args.mode == "model":
         model, metadata = load_router_v2(str(args.artifact))
+    elif args.mode == "dense":
+        ranker = DenseToolRanker.from_path(args.artifact)
     if hasattr(sys.stdin, "reconfigure"):
         sys.stdin.reconfigure(encoding="utf-8")
     if hasattr(sys.stdout, "reconfigure"):
@@ -89,6 +106,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 mode=args.mode,
                 model=model,
                 metadata=metadata,
+                ranker=ranker,
             )
         except (json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
             errors += 1

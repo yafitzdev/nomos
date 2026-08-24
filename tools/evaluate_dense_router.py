@@ -82,6 +82,7 @@ def _score_rows(model: Any, rows: list[dict[str, Any]], batch_size: int) -> dict
     overall: Counter[str] = Counter()
     groups: dict[str, Counter[str]] = {}
     pool_groups: dict[str, Counter[str]] = {}
+    capability_groups: dict[str, Counter[str]] = {}
     disagreements = []
     for row, tools, query_embedding in zip(rows, row_tools, query_embeddings):
         scores = [float(np.dot(query_embedding, by_fingerprint[tool.semantic_fingerprint])) for tool in tools]
@@ -101,13 +102,23 @@ def _score_rows(model: Any, rows: list[dict[str, Any]], batch_size: int) -> dict
         kind = str(row.get("task_kind") or "generic")
         group = groups.setdefault(kind, Counter())
         pool_group = pool_groups.setdefault(str(len(tools)), Counter())
-        for counter in (overall, group, pool_group):
+        registry = {tool.tool_id: tool for tool in tools}
+        expected_capabilities = {
+            capability
+            for tool_id in acceptable
+            if tool_id in registry
+            for capability in registry[tool_id].capabilities
+        }
+        capability_counters = [
+            capability_groups.setdefault(capability, Counter())
+            for capability in expected_capabilities
+        ]
+        for counter in (overall, group, pool_group, *capability_counters):
             counter["states"] += 1
             counter["recall_at_1"] += int(first_rank == 1)
             counter["recall_at_3"] += int(first_rank is not None and first_rank <= 3)
             counter["reciprocal_rank"] += 1.0 / first_rank if first_rank else 0.0
         if first_rank != 1 and len(disagreements) < 50:
-            registry = {tool.tool_id: tool for tool in tools}
             disagreements.append(
                 {
                     "decision_state_id": row.get("decision_state_id"),
@@ -129,6 +140,9 @@ def _score_rows(model: Any, rows: list[dict[str, Any]], batch_size: int) -> dict
         "metrics": _finish(overall),
         "by_task_kind": {key: _finish(value) for key, value in sorted(groups.items())},
         "by_pool_size": {key: _finish(value) for key, value in sorted(pool_groups.items())},
+        "by_expected_capability": {
+            key: _finish(value) for key, value in sorted(capability_groups.items())
+        },
         "unique_candidate_semantics": len(candidate_texts),
         "disagreements": disagreements,
     }
@@ -147,10 +161,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    from sentence_transformers import SentenceTransformer
-
     args = build_parser().parse_args(argv)
-    model = SentenceTransformer(str(args.model), local_files_only=True)
+    if (args.model / "nomos_runtime.json").exists():
+        from fitz_tool.onnx_encoder import OnnxSentenceEncoder
+
+        model = OnnxSentenceEncoder(args.model)
+    else:
+        from sentence_transformers import SentenceTransformer
+
+        model = SentenceTransformer(str(args.model), local_files_only=True)
     reports: dict[str, Mapping[str, Any]] = {}
     for index, path in enumerate(args.input):
         rows, eligible = _sample(path, args.limit, args.seed + index, set(args.partition))

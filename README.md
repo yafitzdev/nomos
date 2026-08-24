@@ -21,6 +21,32 @@ question + agent state + legal tool schemas
 Pi, the language model and the deterministic controller remain responsible
 for tool execution, arguments, provenance, governance and final selection.
 
+## Production status
+
+Nomos now passes the production promotion gates. On a sealed suite with 34
+tools per registry, the correct tool is top-three in 152/152 unseen states. A
+local Qwen3-0.6B agent improves from 2/8 completed tasks with the full registry
+to 8/8 with Nomos, while prompt tokens fall by 86.6%. A stronger agent remains
+8/8 while using 86.0% fewer prompt tokens.
+
+The promoted deployment is a 127.6 MiB FP32 ONNX encoder plus deterministic
+validation, confidence, repair, and no-repeat recovery code. See
+[`docs/PROMOTION_REPORT.md`](docs/PROMOTION_REPORT.md) for the evidence and
+[`docs/EXPERIMENT_LEDGER.md`](docs/EXPERIMENT_LEDGER.md) for retained and
+rejected ablations.
+
+Install the lightweight CPU runtime with:
+
+```powershell
+python -m pip install -e ".[runtime]"
+python tools/run_router_contract.py `
+  --mode dense `
+  --artifact artifacts/nomos_bge_contrast_replay_onnx_fp32_ablation
+```
+
+The contract runner reads one `runner-request.v2` JSON object per input line
+and writes one `router-response.v2` object per line.
+
 ## Generic router v2 and v3 data line
 
 The generic router accepts a versioned tool registry and an external agent's
@@ -49,6 +75,8 @@ Nomos returns at most three described recommendations, exposes calibrated versus
 uncalibrated confidence, can abstain, supports `request_more_tool_candidates`
 with guaranteed no-repeat behavior, and validates proposed calls against tool
 identity, legality, schema, modality, prerequisites, state and side-effect policy.
+Rejected repairable calls include an exact schema-derived retry shape but are
+never silently accepted or executed.
 
 The complete workflow and cohort plan are in
 `docs/GENERIC_NINFER_50K.md`. Older Fitz-Sage-shaped generated data is legacy

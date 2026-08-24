@@ -1,0 +1,39 @@
+{
+  "matrix_version": "matrix.agentic.v4",
+  "purpose": "Focused train-only contrast coverage for opaque third-party tools and confusable workflow transitions",
+  "dimensions": {
+    "contrast_family": [
+      "plan_vs_finish",
+      "inventory_vs_metadata",
+      "broad_vs_exact_search",
+      "schema_vs_records",
+      "document_map_vs_pages",
+      "search_vs_open",
+      "code_map_vs_open",
+      "inspect_vs_expand",
+      "compare_vs_assess",
+      "requirements_vs_finish"
+    ],
+    "history_transition": ["none", "completed_neighbor", "stale_terminal_intent", "failed_distractor"],
+    "registry_style": ["foundry", "delta", "raven"],
+    "instruction_style": ["direct", "ambiguous_verb", "conversational", "constraint"],
+    "capability_visibility": ["opaque"],
+    "candidate_pool_size": [10, 14, 17],
+    "interaction_round": ["initial", "recovery"]
+  },
+  "training_rules": {
+    "canonical_target_absent_from_question": true,
+    "canonical_capability_absent_from_registry": true,
+    "frozen_evaluation_registry_styles_forbidden": [
+      "spectrum",
+      "quarry",
+      "weave",
+      "relay",
+      "cipher",
+      "harvest",
+      "switchboard",
+      "monolith"
+    ],
+    "evaluation_partition": "train"
+  }
+}

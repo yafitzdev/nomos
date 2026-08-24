@@ -25,6 +25,11 @@ reason codes and matched semantic terms. The backward-compatible `ranked_tools`
 field remains available to development evaluators; production clients should
 send only the top-three `recommendations` descriptions to their LLM.
 
+For a repairable schema rejection, `verify_tool_call` also returns a `repair`
+object containing the same tool ID, required and allowed argument names, an
+exact call shape, and a warning that placeholders must be replaced. This is
+guidance only: the malformed call remains rejected and is never executed.
+
 ## Confidence
 
 Raw logits and softmax diagnostics are not confidence. An artifact may claim
@@ -32,10 +37,10 @@ Raw logits and softmax diagnostics are not confidence. An artifact may claim
 validation partition. The abstention threshold is selected for a declared
 maximum selective risk and is then measured once on the untouched test split.
 
-The retained 100k baseline is not production-calibrated. On agentic v1, a
-logistic confidence layer had to reduce coverage to 0.7% to keep observed test
-risk below 1%. This shell therefore provides the mechanism, not evidence that
-the existing ranker is ready.
+The promoted dense artifact embeds a multiview logistic calibration fitted on
+validation only. On the untouched test split it reaches 0.78% selective risk,
+97.29% recall for no-suitable-tool abstention, and 0.66% false abstention on
+suitable states. Calibration does not replace deterministic validation.
 
 ## Data v2 boundary
 
@@ -44,3 +49,12 @@ task type independent from pool size, represent abstention explicitly, balance
 valid and invalid verification cases, freeze registries/templates by split,
 and treat recovery as the same routing problem with a deterministic exclusion
 set. V1 rows remain immutable audit inputs and are not silently appended to v2.
+
+## Promotion evidence
+
+The promoted model and FP32 ONNX runtime pass 100% top-three recall over 152
+states from unseen 34-tool registries. Frozen deterministic evaluation reports
+zero illegal recommendations, 100% validation accuracy, zero false accepts in
+341 invalid calls, 100% no-repeat expansion, and 99.30% recovery Recall@3.
+Executed weak-agent sessions improve from 25% to 100% completion. Full details
+and remaining weaknesses are in [`PROMOTION_REPORT.md`](PROMOTION_REPORT.md).

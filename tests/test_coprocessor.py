@@ -64,6 +64,25 @@ def test_verification_is_deterministic_and_does_not_rank() -> None:
     assert response["confidence"]["method"] == "deterministic_contract_validation"
 
 
+def test_schema_rejection_returns_non_executable_repair_shape() -> None:
+    row = generate_agentic_states(1)[0][0]
+    request = _request(row)
+    request["operation"] = "verify_tool_call"
+    tool_id = request["legal_candidate_ids"][0]
+    request["proposed_tool_call"] = {"tool_id": tool_id, "arguments": {}}
+
+    response = coprocessor_response(
+        request,
+        [],
+        router_version="test-router",
+    )
+
+    assert response["action"] == "reject_tool_call"
+    assert response["repair"]["strategy"] == "repair_same_tool_call"
+    assert response["repair"]["tool_id"] == tool_id
+    assert response["repair"]["warning"].startswith("Replace every placeholder")
+
+
 def test_calibrated_low_confidence_abstains() -> None:
     row = generate_agentic_states(1)[0][0]
     request = _request(row)

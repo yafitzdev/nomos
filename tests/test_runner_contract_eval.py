@@ -56,7 +56,9 @@ def test_runner_contract_builds_multi_step_requests_without_oracle_fields() -> N
 
 def test_router_contract_candidate_order_mode_returns_only_legal_tools() -> None:
     request = _build_tasks([_source_row()], ["spectrum"], seed=17)[0]["steps"][0]["request"]
-    response = route_request(request, mode="candidate_order", model=None, metadata=None)
+    response = route_request(
+        request, mode="candidate_order", model=None, metadata=None, ranker=None
+    )
     assert response["schema_version"] == "router-response.v2"
     assert response["selected_tool"] in request["legal_candidate_ids"]
     assert [item["tool_id"] for item in response["ranked_tools"]] == request["legal_candidate_ids"]

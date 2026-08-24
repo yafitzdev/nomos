@@ -6,11 +6,11 @@ import math
 import re
 from typing import Any, Iterable, Mapping
 
-from .call_validation import validate_tool_call
+from .call_validation import ToolCallValidation, validate_tool_call
 from .tool_registry import ToolRegistry, ToolSpec
 
 
-COPROCESSOR_VERSION = "nomos-coprocessor.v1"
+COPROCESSOR_VERSION = "nomos-coprocessor.v2"
 TOKEN_RE = re.compile(r"[a-zA-Z0-9_]+")
 
 
@@ -112,6 +112,61 @@ def _candidate_reasons(
     }
 
 
+def _schema_placeholder(name: str, schema: Mapping[str, Any]) -> Any:
+    value_type = str(schema.get("type") or "value")
+    if value_type == "string":
+        return f"<string value for {name}>"
+    if value_type == "integer":
+        return f"<integer value for {name}>"
+    if value_type == "number":
+        return f"<number value for {name}>"
+    if value_type == "boolean":
+        return f"<boolean value for {name}>"
+    if value_type == "array":
+        return []
+    if value_type == "object":
+        return {}
+    return f"<value for {name}>"
+
+
+def validation_repair_guidance(
+    registry: ToolRegistry, validation: ToolCallValidation
+) -> dict[str, Any] | None:
+    """Describe a safe retry shape without accepting or executing a bad call."""
+
+    if validation.valid:
+        return None
+    tool = registry.by_id.get(validation.tool_id)
+    if not validation.repairable or tool is None:
+        return {
+            "strategy": "choose_different_tool",
+            "tool_id": validation.tool_id or None,
+            "reason_codes": list(validation.failure_reasons),
+        }
+    properties = tool.argument_schema.get("properties") or {}
+    properties = properties if isinstance(properties, Mapping) else {}
+    required = [str(value) for value in tool.argument_schema.get("required") or []]
+    allowed = [str(value) for value in properties]
+    argument_shape = {
+        name: _schema_placeholder(
+            name,
+            properties.get(name) if isinstance(properties.get(name), Mapping) else {},
+        )
+        for name in required
+    }
+    return {
+        "strategy": "repair_same_tool_call",
+        "tool_id": tool.tool_id,
+        "required_argument_names": required,
+        "allowed_argument_names": allowed,
+        "additional_arguments_allowed": tool.argument_schema.get("additionalProperties")
+        is not False,
+        "call_shape": {"tool_id": tool.tool_id, "arguments": argument_shape},
+        "reason_codes": list(validation.failure_reasons),
+        "warning": "Replace every placeholder with a real value; this is guidance, not an accepted call.",
+    }
+
+
 def coprocessor_response(
     request: Mapping[str, Any],
     ranked: Iterable[Mapping[str, Any]],
@@ -149,6 +204,7 @@ def coprocessor_response(
         if not isinstance(proposed, Mapping):
             raise ValueError("verify_tool_call requires proposed_tool_call")
         validation = validate_tool_call(registry, request, proposed)
+        repair = validation_repair_guidance(registry, validation)
         return {
             **base,
             "action": "accept_tool_call" if validation.valid else "reject_tool_call",
@@ -162,6 +218,7 @@ def coprocessor_response(
                 "uncertainty": 0.0,
             },
             "validation": validation.as_dict(),
+            "repair": repair,
             "reason_codes": list(validation.checked if validation.valid else validation.failure_reasons),
         }
 

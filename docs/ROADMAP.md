@@ -1,10 +1,11 @@
 # Fitz-Tool execution roadmap
 
-> **Current status:** The historical Fitz-Sage-shaped bootstrap described below
-> is retained only as design history. It is not active training data. The
-> retained project-agnostic baseline has passed validation, training and
-> held-out evaluation. The additive generic agentic extension is documented in
-> [`AGENTIC_DATA_V1.md`](AGENTIC_DATA_V1.md).
+> **Current status (2026-08-24):** Nomos passes the production promotion gates.
+> The promoted contrast-replay encoder and FP32 ONNX runtime achieve 100%
+> top-three recall on sealed unseen 34-tool registries and raise weak-agent task
+> completion from 25% to 100%. See [`PROMOTION_REPORT.md`](PROMOTION_REPORT.md)
+> and [`EXPERIMENT_LEDGER.md`](EXPERIMENT_LEDGER.md). The older roadmap below is
+> retained as design and experiment history.
 
 ## Objective
 

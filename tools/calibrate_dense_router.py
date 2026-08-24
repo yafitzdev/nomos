@@ -14,7 +14,12 @@ from fitz_tool.calibration import (
     predict_confidence,
 )
 from fitz_tool.coprocessor import score_diagnostics
-from fitz_tool.dense_router import candidate_document, eligible_tools, query_document
+from fitz_tool.dense_router import (
+    candidate_views,
+    eligible_tools,
+    query_document,
+    weighted_query_views,
+)
 
 
 def _load_rows(path: Path) -> dict[str, list[dict[str, Any]]]:
@@ -30,34 +35,71 @@ def _load_rows(path: Path) -> dict[str, list[dict[str, Any]]]:
     return output
 
 
-def _records(model: Any, rows: list[dict[str, Any]], batch_size: int) -> list[dict[str, Any]]:
+def _records(
+    model: Any,
+    rows: list[dict[str, Any]],
+    batch_size: int,
+    *,
+    query_strategy: str,
+    candidate_strategy: str,
+) -> list[dict[str, Any]]:
     import numpy as np
 
     tools_by_row = [eligible_tools(row) for row in rows]
-    documents: dict[str, str] = {}
+    documents: dict[str, tuple[str, ...]] = {}
     for tools in tools_by_row:
         for tool in tools:
-            documents.setdefault(tool.semantic_fingerprint, candidate_document(tool))
+            views = candidate_views(tool)
+            documents.setdefault(
+                tool.semantic_fingerprint,
+                views if candidate_strategy == "multiview" else (views[0],),
+            )
     fingerprints = sorted(documents)
     embeddings = model.encode(
-        [documents[value] for value in fingerprints],
+        [text for fingerprint in fingerprints for text in documents[fingerprint]],
         batch_size=batch_size,
         normalize_embeddings=True,
         show_progress_bar=True,
     )
-    candidate_embeddings = dict(zip(fingerprints, embeddings))
+    candidate_embeddings = {}
+    offset = 0
+    for fingerprint in fingerprints:
+        count = len(documents[fingerprint])
+        candidate_embeddings[fingerprint] = embeddings[offset : offset + count]
+        offset += count
+
+    query_views = [
+        weighted_query_views(row)
+        if query_strategy == "multiview"
+        else ((query_document(row), 1.0),)
+        for row in rows
+    ]
+    query_texts = list(
+        dict.fromkeys(text for views in query_views for text, _weight in views)
+    )
     queries = model.encode(
-        [query_document(row) for row in rows],
+        query_texts,
         batch_size=batch_size,
         normalize_embeddings=True,
         show_progress_bar=True,
+        prompt_name="query" if "query" in getattr(model, "prompts", {}) else None,
     )
+    query_by_text = dict(zip(query_texts, queries))
     records = []
-    for row, tools, query in zip(rows, tools_by_row, queries):
+    for row, tools, views in zip(rows, tools_by_row, query_views):
         scored = sorted(
             (
                 (
-                    float(np.dot(query, candidate_embeddings[tool.semantic_fingerprint])),
+                    sum(
+                        weight
+                        * float(
+                            np.dot(
+                                candidate_embeddings[tool.semantic_fingerprint],
+                                query_by_text[text],
+                            ).max()
+                        )
+                        for text, weight in views
+                    ),
                     tool.tool_id,
                 )
                 for tool in tools
@@ -114,6 +156,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model", type=Path, required=True)
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument(
+        "--query-strategy", choices=("single", "multiview"), default="multiview"
+    )
+    parser.add_argument(
+        "--candidate-strategy",
+        choices=("single", "multiview"),
+        default="multiview",
+    )
     parser.add_argument("--maximum-selective-risk", type=float, default=0.01)
     parser.add_argument("--output", type=Path, required=True)
     return parser
@@ -126,7 +176,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     model = SentenceTransformer(str(args.model), local_files_only=True)
     rows = _load_rows(args.input)
     records = {
-        partition: _records(model, partition_rows, args.batch_size)
+        partition: _records(
+            model,
+            partition_rows,
+            args.batch_size,
+            query_strategy=args.query_strategy,
+            candidate_strategy=args.candidate_strategy,
+        )
         for partition, partition_rows in rows.items()
     }
     calibration = fit_logistic_calibration(records["validation"])
@@ -140,6 +196,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     report = {
         "model": str(args.model),
         "input": str(args.input),
+        "query_strategy": args.query_strategy,
+        "candidate_strategy": args.candidate_strategy,
         "maximum_selective_risk": args.maximum_selective_risk,
         "calibration": calibration,
         "threshold_selection": threshold,

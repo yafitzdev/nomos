@@ -1,0 +1,24 @@
+{
+  "matrix_version": "matrix.agentic.v3",
+  "purpose": "Training-only state-transition and hard-negative refinement for a project-agnostic agentic router",
+  "dimensions": {
+    "history_transition": [
+      "no_history",
+      "related_completed",
+      "confusable_completed",
+      "stale_prior_intent",
+      "failed_prior_candidates"
+    ],
+    "registry_semantic_style": ["atlas", "sable", "orbit"],
+    "instruction_style": ["direct", "outcome", "constraint", "conversational"],
+    "candidate_pool_size": [10, 17],
+    "session_position": ["initial", "middle", "late"],
+    "interaction_round": ["initial", "expanded"]
+  },
+  "training_rules": {
+    "canonical_target_absent_from_query_state": true,
+    "frozen_external_registry_styles_forbidden": ["spectrum", "quarry", "weave", "relay"],
+    "evaluation_partition": "train",
+    "one_matrix_cell_per_row": true
+  }
+}

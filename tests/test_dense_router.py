@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 from fitz_tool.agentic_pilot import generate_agentic_states
-from fitz_tool.dense_router import candidate_document, eligible_tools, query_document
+from fitz_tool.dense_router import (
+    candidate_document,
+    candidate_views,
+    eligible_tools,
+    query_document,
+    weighted_query_views,
+)
 from fitz_tool.tool_registry import ToolRegistry
 
 
@@ -14,6 +20,8 @@ def test_dense_text_does_not_expose_hidden_matrix_labels_or_tool_ids() -> None:
     registry = ToolRegistry.from_dict(row["tool_registry"])
     tool = registry.require(row["legal_candidate_ids"][0])
     assert tool.tool_id not in candidate_document(tool)
+    assert all(tool.tool_id not in view for view in candidate_views(tool))
+    assert candidate_views(tool)[0] == candidate_document(tool)
 
 
 def test_recovery_candidates_deterministically_exclude_previous_tools() -> None:
@@ -25,4 +33,25 @@ def test_recovery_candidates_deterministically_exclude_previous_tools() -> None:
     assert previous.isdisjoint(tool.tool_id for tool in eligible)
     assert set(recovery["label"]["acceptable_tools"]).issubset(
         tool.tool_id for tool in eligible
+    )
+
+
+def test_dense_query_includes_observable_history_and_plan() -> None:
+    row = generate_agentic_states(1)[0][0]
+    row["history"] = [{"completed_step": "Inspected the available schema."}]
+    row["plan"] = {"remaining_step": "Retrieve matching structured records."}
+    query = query_document(row)
+    assert "Inspected the available schema" in query
+    assert "Retrieve matching structured records" in query
+
+
+def test_weighted_query_views_prioritize_current_plan_without_hidden_labels() -> None:
+    row = generate_agentic_states(1)[0][0]
+    row["plan"] = {"remaining_step": "Inspect fields before filtering rows."}
+    views = weighted_query_views(row)
+    assert abs(sum(weight for _text, weight in views) - 1.0) < 1e-9
+    focused = next(weight for text, weight in views if text.startswith("Next required outcome"))
+    assert focused > 0.5
+    assert row["matrix_cell"]["target_capability"] not in "\n".join(
+        text for text, _weight in views
     )
