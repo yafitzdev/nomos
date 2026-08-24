@@ -607,6 +607,32 @@ def _canonical_capability(tool_id: str, suite: str, registry: ToolRegistry) -> s
     return registry.require(tool_id).capabilities[0]
 
 
+def _session_cases(
+    workflows: Sequence[Mapping[str, Any]],
+    registry_styles: Sequence[str],
+    *,
+    sessions: int,
+    pairing: str,
+) -> list[tuple[Mapping[str, Any], str]]:
+    if sessions < 1:
+        raise ValueError("sessions must be positive")
+    if pairing == "cross-product":
+        base = [
+            (workflow, registry_style)
+            for workflow in workflows
+            for registry_style in registry_styles
+        ]
+    else:
+        base = [
+            (
+                workflows[index % len(workflows)],
+                registry_styles[index % len(registry_styles)],
+            )
+            for index in range(max(len(workflows), len(registry_styles)))
+        ]
+    return [base[index % len(base)] for index in range(sessions)]
+
+
 def _run_session(
     backend: ChatBackend,
     selector: DenseSelector | None,
@@ -769,6 +795,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--sessions", type=int, default=8)
     parser.add_argument(
+        "--pairing",
+        choices=("cycle", "cross-product"),
+        default="cycle",
+        help=(
+            "cycle preserves historical workflow/registry pairing; cross-product "
+            "enumerates every selected workflow against every registry style"
+        ),
+    )
+    parser.add_argument(
         "--suite",
         choices=("development", "final", "promotion"),
         default="development",
@@ -847,9 +882,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not workflows:
         raise SystemExit("the selected workflow does not belong to the requested suite")
     traces = []
-    for index in range(args.sessions):
-        workflow = workflows[index % len(workflows)]
-        registry = registry_builder(registry_styles[index % len(registry_styles)])
+    cases = _session_cases(
+        workflows,
+        registry_styles,
+        sessions=args.sessions,
+        pairing=args.pairing,
+    )
+    for workflow, registry_style in cases:
+        registry = registry_builder(registry_style)
         for condition in conditions:
             traces.append(
                 _run_session(
@@ -915,6 +955,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "suite": args.suite,
         "suite_version": suite_version,
         "sessions_per_condition": args.sessions,
+        "pairing": args.pairing,
         "max_attempts": args.max_attempts,
         "summaries": summaries,
     }

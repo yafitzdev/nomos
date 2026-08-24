@@ -14,7 +14,7 @@ from fitz_tool.promotion_holdout_fixtures import (
     PROMOTION_REGISTRY_STYLES,
     build_promotion_registry,
 )
-from tools.evaluate_real_agent_sessions import WORKFLOWS, _run_session
+from tools.evaluate_real_agent_sessions import WORKFLOWS, _run_session, _session_cases
 
 
 class ScriptedBackend:
@@ -28,6 +28,27 @@ class ScriptedBackend:
             "prompt_tokens": 10,
             "completion_tokens": 4,
         }
+
+
+def test_cross_product_session_pairing_covers_every_combination() -> None:
+    workflows = ({"name": "one"}, {"name": "two"})
+    styles = ("alpha", "beta", "gamma")
+
+    cases = _session_cases(
+        workflows,
+        styles,
+        sessions=6,
+        pairing="cross-product",
+    )
+
+    assert {(workflow["name"], style) for workflow, style in cases} == {
+        ("one", "alpha"),
+        ("one", "beta"),
+        ("one", "gamma"),
+        ("two", "alpha"),
+        ("two", "beta"),
+        ("two", "gamma"),
+    }
 
 
 def test_final_registries_hide_canonical_capability_names() -> None:
