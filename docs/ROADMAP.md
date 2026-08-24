@@ -92,23 +92,35 @@ after a multi-source/negative-source manifest exists.
 
 ### Generic agentic extension
 
-The agentic v1 matrix and deterministic validator are implemented. The 1,000
-row balanced DeepSeek pilot and the separate 10,000-row DeepSeek extension both
-pass structural validation and the reproducible 25-row sample gate. The scale
-cohort has exact route/recover/verify and candidate-pool coverage, and records
-10,000 unique matrix/type/instance/question signatures. DeepSeek capacity was
-measured through 32 rows per request at 256 concurrent workers; the scale run
-used that batch size and recorded approximately 198 total tokens per row.
+The agentic v1 matrix and deterministic validator produced a 1,000-row pilot and
+a 10,000-row DeepSeek extension. Both are preserved, but v1 is not eligible for
+the production training line. Its generator accidentally coupled task type to
+pool size (route=10, recover=30, verify=100), its language validator checked
+format rather than intent preservation, and verification was mixed into a
+retrieval objective despite being a deterministic contract problem.
 
-The existing generic baseline remains the production comparison point. A
-targeted-only model and a mixed model are trained separately so we can answer
-whether the old clean corpus should be retained rather than accidentally
-creating an unmeasured mixture. The latest results are kept in the ignored
-`runs/nomos_agentic_model_comparison_pilot_v2.json` report and the scaled
-`runs/nomos_agentic_model_comparison_scale_v1.json` report. The scaled
-targeted-only model reaches 0.492/0.774 Recall@1/Recall@3 on the new slice,
-but falls to 0.527/0.800 on the old holdout; the mixed model reaches
-0.456/0.728 and 0.547/0.851 respectively. Neither replaces the baseline.
+The existing generic baseline remains the comparison point. The corrected
+test-only report is `runs/nomos_agentic_model_comparison_test_only_v1.json`.
+On accepted agentic states, baseline/targeted/mixed Recall@3 is
+0.743/0.731/0.705. On the old frozen holdout it is 0.966/0.800/0.851. Earlier
+agentic headline numbers evaluated the entire 10k file and therefore included
+training rows; they must not be used. None of the new models replaces the
+baseline.
+
+`matrix.agentic.v2` is now the active design. It independently samples task
+kind and candidate-pool size, adds no-suitable-tool abstention cases, separates
+call verification from retrieval, varies hard-negative type and description
+quality, and freezes registry and question-template namespaces by split. No v2
+language rows should be generated until its deterministic skeleton and frozen
+evaluation suite pass.
+
+The production-facing coprocessor shell is also implemented. It guarantees that
+ranked outputs are legal, excludes prior candidates during recovery, validates
+calls deterministically, emits machine-readable reasons and refuses to describe
+raw scores as calibrated confidence. A first calibration audit of the retained
+100k baseline could satisfy a 1% selective-risk target on only 0.7% of test
+requests. This is evidence that the ranking model must improve; thresholding or
+scaling the existing recipe is not enough.
 
 The active generic line is complete through the 100k portability gate:
 

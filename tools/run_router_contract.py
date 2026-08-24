@@ -8,14 +8,13 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from fitz_tool.coprocessor import coprocessor_response
 from fitz_tool.generic_contracts import validate_runner_request_v2
 from fitz_tool.router_v2 import load_router_v2, rank_tools_v2
 from fitz_tool.tool_registry import ToolRegistry
 
 
 RESPONSE_VERSION = "router-response.v2"
-RUNNER_NAME = "nomos-router-contract"
-RUNNER_VERSION = "router-contract.v1"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -56,17 +55,12 @@ def route_request(
             raise ValueError("model mode requires an artifact")
         ranked = rank_tools_v2(model, metadata, request, top_k=len(request["legal_candidate_ids"]))
         router_version = str(metadata.get("router_version", "unknown"))
-    return {
-        "schema_version": RESPONSE_VERSION,
-        "request_id": str(request["request_id"]),
-        "selected_tool": ranked[0]["tool_id"],
-        "ranked_tools": ranked,
-        "runner": {
-            "name": RUNNER_NAME,
-            "version": RUNNER_VERSION,
-            "router_version": router_version,
-        },
-    }
+    return coprocessor_response(
+        request,
+        ranked,
+        router_version=router_version,
+        calibration=(metadata or {}).get("confidence_calibration"),
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -102,7 +96,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "schema_version": RESPONSE_VERSION,
                 "request_id": str(request.get("request_id", "")) if request else "",
                 "error": f"line {line_number}: {exc}",
-                "runner": {"name": RUNNER_NAME, "version": RUNNER_VERSION},
+                "runner": {"name": "nomos-router-contract", "version": "router-contract.v2"},
             }
         print(json.dumps(response, ensure_ascii=False, sort_keys=True), flush=True)
     return 1 if errors else 0

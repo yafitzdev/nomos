@@ -36,13 +36,19 @@ actual teacher and model. The separation is deliberate: teacher wording is
 real LLM output, while acceptance and labels remain reproducible and cannot be
 silently changed by a teacher hallucination.
 
-The current targeted extension is `nomos-agentic.v1`, documented in
-[`docs/AGENTIC_DATA_V1.md`](docs/AGENTIC_DATA_V1.md). It adds route, recovery
-and deterministic tool-call verification states for candidate pools of 10, 30
-and 100 tools, including unseen tool IDs/families and the explicit
-`request_more_tool_candidates` action. It is additive: the existing clean
-generic baseline is preserved, while Fitz-Sage-specific legacy data remains
-quarantined and ineligible for generic training.
+`nomos-agentic.v1`, documented in [`docs/AGENTIC_DATA_V1.md`](docs/AGENTIC_DATA_V1.md),
+is retained as an audited development cohort, not as the production data line.
+An honest test-only rerun found coupled dimensions and semantically underspecified
+teacher rows. `matrix.agentic.v2` replaces it with independently sampled pool sizes,
+task kinds, abstention cases, hard-negative classes, balanced call verification,
+and split-specific registry/template namespaces. Existing clean generic data and
+artifacts remain preserved; Fitz-Sage-specific legacy data remains quarantined.
+
+The runtime contract now separates learned ranking from deterministic safety.
+Nomos returns at most three described recommendations, exposes calibrated versus
+uncalibrated confidence, can abstain, supports `request_more_tool_candidates`
+with guaranteed no-repeat behavior, and validates proposed calls against tool
+identity, legality, schema, modality, prerequisites, state and side-effect policy.
 
 The complete workflow and cohort plan are in
 `docs/GENERIC_NINFER_50K.md`. Older Fitz-Sage-shaped generated data is legacy

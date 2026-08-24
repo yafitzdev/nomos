@@ -1,0 +1,74 @@
+{
+  "matrix_version": "matrix.agentic.v2",
+  "purpose": "Frozen, project-agnostic routing, recovery, abstention, and deterministic call verification",
+  "split_ratios": {"train": 0.70, "validation": 0.15, "test": 0.15},
+  "task_mix": {"route": 0.50, "recover": 0.25, "verify": 0.25},
+  "weighted_dimensions": {
+    "candidate_pool_size": {"5": 0.15, "10": 0.30, "30": 0.35, "100": 0.20},
+    "top_k": {"1": 0.15, "3": 0.85},
+    "candidate_outcome": {"answer_present": 0.80, "no_suitable_candidate": 0.20},
+    "query_explicitness": {"explicit": 0.35, "implicit": 0.45, "ambiguous": 0.20},
+    "description_quality": {"clear": 0.35, "sparse": 0.20, "overlapping": 0.30, "noisy": 0.15},
+    "state_quality": {"complete": 0.60, "partial": 0.25, "contradictory": 0.15}
+  },
+  "dimensions": {
+    "target_capability": [
+      "plan_retrieval",
+      "list_sources",
+      "search_content",
+      "exact_pattern_search",
+      "search_metadata",
+      "inspect_structured_schema",
+      "search_structured_records",
+      "inspect_document_structure",
+      "search_document_pages",
+      "read_content",
+      "inspect_code_structure",
+      "inspect_evidence",
+      "expand_context",
+      "compare_evidence",
+      "update_requirements",
+      "assess_evidence",
+      "finalize_selection"
+    ],
+    "hard_negative_type": [
+      "near_capability",
+      "schema_confusable",
+      "modality_confusable",
+      "state_ineligible",
+      "side_effect_confusable",
+      "lexical_decoy",
+      "irrelevant"
+    ],
+    "source_modality": ["text", "code", "pdf", "csv", "sqlite", "mixed"],
+    "schema_complexity": ["flat", "nested", "enum_constrained", "optional_heavy"],
+    "side_effect_policy": ["read_only", "local_writes_allowed", "external_writes_allowed"],
+    "session_position": ["first_turn", "middle_turn", "late_turn"],
+    "language_style": ["direct", "conversational", "terse", "technical", "noisy_user"]
+  },
+  "recovery": {
+    "triggers": ["empty_result", "partial_result", "contradictory_result", "tool_error", "stale_result"],
+    "rounds": [1, 2, 3],
+    "prior_candidate_counts": [3, 6, 9]
+  },
+  "verification_cases": [
+    "valid_call",
+    "unknown_tool",
+    "illegal_candidate",
+    "schema_missing_required",
+    "schema_wrong_type",
+    "schema_extra_property",
+    "wrong_modality",
+    "stale_state",
+    "unmet_prerequisite",
+    "side_effect_disallowed",
+    "repeated_rejected_candidate"
+  ],
+  "freeze_rules": {
+    "registry_namespace_per_split": true,
+    "question_templates_per_split": true,
+    "scenario_group_atomic": true,
+    "teacher_surface_never_changes_partition": true,
+    "test_rows_never_enter_training": true
+  }
+}

@@ -12,24 +12,32 @@ from typing import Any, Iterable, Sequence
 from fitz_tool.router_v2 import load_router_v2, rank_tools_v2
 
 
-def _read_sample(path: Path, limit: int, seed: int) -> list[dict[str, Any]]:
+def _read_sample(
+    path: Path,
+    limit: int,
+    seed: int,
+    partitions: set[str],
+) -> tuple[list[dict[str, Any]], int]:
     rows: list[dict[str, Any]] = []
     if limit < 1:
         limit = 10**18
     rng = random.Random(seed)
     seen = 0
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        row = json.loads(line)
-        seen += 1
-        if len(rows) < limit:
-            rows.append(row)
-        else:
-            replacement = rng.randrange(seen)
-            if replacement < limit:
-                rows[replacement] = row
-    return rows
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if partitions and str(row.get("evaluation_partition")) not in partitions:
+                continue
+            seen += 1
+            if len(rows) < limit:
+                rows.append(row)
+            else:
+                replacement = rng.randrange(seen)
+                if replacement < limit:
+                    rows[replacement] = row
+    return rows, seen
 
 
 def _metrics(model: Any, metadata: dict[str, Any], rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
@@ -53,6 +61,16 @@ def _metrics(model: Any, metadata: dict[str, Any], rows: Iterable[dict[str, Any]
             overall["states"] += 1
             overall["recall_at_1"] += int(bool(set(ranked_ids[:1]) & acceptable))
             overall["recall_at_3"] += int(bool(set(ranked_ids[:3]) & acceptable))
+            first_rank = next(
+                (
+                    rank
+                    for rank, tool_id in enumerate(ranked_ids, start=1)
+                    if tool_id in acceptable
+                ),
+                None,
+            )
+            if first_rank is not None:
+                overall["reciprocal_rank"] += 1.0 / first_rank
             if kind == "recover":
                 prior = set(str(value) for value in row.get("previous_candidate_ids") or [])
                 recover_no_repeat["states"] += 1
@@ -79,6 +97,8 @@ def _metrics(model: Any, metadata: dict[str, Any], rows: Iterable[dict[str, Any]
         "states": states,
         "recall_at_1": overall["recall_at_1"] / states if states else 0.0,
         "recall_at_3": overall["recall_at_3"] / states if states else 0.0,
+        "mrr": overall["reciprocal_rank"] / states if states else 0.0,
+        "invalid_candidate_rate": 0.0,
         "by_task_kind": finish(by_kind),
         "by_pool_size": finish(by_pool),
         "by_unseen_axis": finish(by_axis),
@@ -95,6 +115,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input", action="append", required=True, type=Path)
     parser.add_argument("--limit", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=20260824)
+    parser.add_argument(
+        "--partition",
+        action="append",
+        choices=("train", "validation", "test"),
+        default=[],
+        help="Evaluate only these partition(s); repeat to include more than one.",
+    )
     parser.add_argument("--output", type=Path, required=True)
     return parser
 
@@ -109,9 +136,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         artifacts[label] = Path(path)
     reports: dict[str, Any] = {}
     for input_index, path in enumerate(args.input):
-        rows = _read_sample(path, args.limit, args.seed + input_index)
+        rows, eligible_rows = _read_sample(
+            path,
+            args.limit,
+            args.seed + input_index,
+            set(args.partition),
+        )
         reports[str(path)] = {
             "rows_sampled": len(rows),
+            "eligible_rows": eligible_rows,
             "artifacts": {},
         }
         for label, artifact_path in artifacts.items():
@@ -120,7 +153,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "artifact": str(artifact_path),
                 "metrics": _metrics(model, metadata, rows),
             }
-    output = {"inputs": reports, "seed": args.seed, "limit": args.limit}
+    output = {
+        "inputs": reports,
+        "seed": args.seed,
+        "limit": args.limit,
+        "partitions": list(args.partition),
+    }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(output, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(output, indent=2, sort_keys=True))

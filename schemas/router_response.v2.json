@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nomos.local/schema/router_response.v2.json",
+  "title": "Nomos coprocessor response",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "coprocessor_version",
+    "request_id",
+    "operation",
+    "action",
+    "selected_tool",
+    "ranked_tools",
+    "recommendations",
+    "confidence",
+    "reason_codes",
+    "runner"
+  ],
+  "properties": {
+    "schema_version": {"const": "router-response.v2"},
+    "coprocessor_version": {"const": "nomos-coprocessor.v1"},
+    "request_id": {"type": "string"},
+    "operation": {
+      "enum": ["recommend_tools", "request_more_tool_candidates", "verify_tool_call"]
+    },
+    "action": {
+      "enum": [
+        "recommend_tools",
+        "request_more_tool_candidates",
+        "accept_tool_call",
+        "reject_tool_call",
+        "abstain"
+      ]
+    },
+    "selected_tool": {"type": ["string", "null"]},
+    "ranked_tools": {"type": "array"},
+    "recommendations": {"type": "array", "maxItems": 3},
+    "reason_codes": {"type": "array", "items": {"type": "string"}},
+    "confidence": {
+      "type": "object",
+      "required": ["value", "calibrated", "method", "uncertainty"],
+      "properties": {
+        "value": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "calibrated": {"type": "boolean"},
+        "method": {"type": "string"},
+        "uncertainty": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    }
+  }
+}
