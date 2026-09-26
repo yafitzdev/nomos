@@ -8,6 +8,8 @@
 
 [Why it exists](#why-it-exists) · [How it works](#how-it-works) · [What it enables](#what-it-enables) · [Boundaries](#boundaries)
 
+[Model collection](https://huggingface.co/collections/yafitzdev/nomos-v1) · [Dataset](https://huggingface.co/datasets/yafitzdev/nomos-v1) · [All datasets](https://huggingface.co/yafitzdev/datasets)
+
 </div>
 
 ---
